@@ -1,0 +1,8 @@
+<Window x:Class="EventDeck.WebResourceDialog" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Agregar página web" Width="480" Height="250" WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="#191E28" Foreground="#F3F5F8" FontFamily="Segoe UI">
+    <Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <TextBlock Text="AGREGAR PÁGINA WEB" FontSize="15" FontWeight="Bold" Margin="0,0,0,15"/>
+        <StackPanel Grid.Row="1" Margin="0,0,0,12"><TextBlock Text="NOMBRE" Foreground="#9AA5B5" FontSize="10" Margin="0,0,0,5"/><TextBox x:Name="NameBox"/></StackPanel>
+        <StackPanel Grid.Row="2"><TextBlock Text="URL" Foreground="#9AA5B5" FontSize="10" Margin="0,0,0,5"/><TextBox x:Name="UrlBox" Text="https://"/></StackPanel>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom"><Button Content="Cancelar" IsCancel="True" Margin="0,0,8,0" Click="Cancel_Click"/><Button Content="Agregar a preview" Background="#254840" BorderBrush="#38776B" IsDefault="True" Click="Add_Click"/></StackPanel>
+    </Grid>
+</Window>

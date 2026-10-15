@@ -1,0 +1,19 @@
+<Window x:Class="EventDeck.BinNameDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Nombre de pestaña" Width="410" Height="185" MinWidth="350"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#171D27" Foreground="#F2F4F8" FontFamily="Segoe UI">
+    <Grid Margin="20">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <TextBlock Text="Nombre de la pestaña" FontSize="14" FontWeight="SemiBold"/>
+        <TextBox x:Name="NameBox" Grid.Row="1" Height="38" Margin="0,12,0,18" Padding="9,5"
+                 FontSize="16" VerticalContentAlignment="Center" Foreground="#F2F4F8"
+                 Background="#0E131B" CaretBrush="White" SelectionBrush="#386C9B"
+                 BorderBrush="#465366" BorderThickness="1"/>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="CANCELAR" IsCancel="True" Padding="14,7" Margin="0,0,8,0"/>
+            <Button Content="ACEPTAR" IsDefault="True" Click="Accept_Click" Padding="14,7" Background="#24443F" BorderBrush="#38776B"/>
+        </StackPanel>
+    </Grid>
+</Window>
