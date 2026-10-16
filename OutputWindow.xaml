@@ -6,6 +6,9 @@
         ShowInTaskbar="False" Topmost="True" Loaded="Window_Loaded" Closed="Window_Closed">
     <Grid Background="Black" ClipToBounds="True">
         <Image x:Name="OutputSurface" Stretch="Uniform"/>
-        <wv2:WebView2 x:Name="OutputWeb" Visibility="Collapsed" />
+        <Grid x:Name="OutputWebHost">
+            <wv2:WebView2 x:Name="OutputWeb" Visibility="Collapsed" />
+        </Grid>
+        <Border x:Name="OutputBlackOverlay" Background="Black" Visibility="Collapsed" IsHitTestVisible="False"/>
     </Grid>
 </Window>

@@ -16,6 +16,7 @@ public sealed class OutputWindowHost
     private DispatcherTimer? _statusTimer;
     private OutputProgramSnapshot _snapshot = new(null, false, false, false, false, TimeSpan.Zero, TimeSpan.Zero);
     private int _isOpen;
+    private bool _testMode;
 
     public event EventHandler? ProgramStateChanged;
     public event EventHandler? Closed;
@@ -30,6 +31,7 @@ public sealed class OutputWindowHost
     public Task OpenAsync(bool testMode, double left, double top, double width, double height)
     {
         if (_thread is not null) throw new InvalidOperationException("La salida ya fue inicializada.");
+        _testMode = testMode;
         var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _thread = new Thread(() =>
         {
@@ -103,13 +105,13 @@ public sealed class OutputWindowHost
         finally { _sceneCommands.Release(); }
     }
 
-    public async Task BlackAsync(bool fade)
+    public async Task ToggleBlackAsync()
     {
         await _sceneCommands.WaitAsync();
         try
         {
             var dispatcher = GetDispatcher();
-            var operation = dispatcher.InvokeAsync(() => _window!.BlackAsync(fade));
+            var operation = dispatcher.InvokeAsync(() => _window!.ToggleBlackAsync());
             await operation.Task.Unwrap();
         }
         finally { _sceneCommands.Release(); }
@@ -158,8 +160,11 @@ public sealed class OutputWindowHost
         var session = window.ProgramPlayer;
         var duration = session?.Duration ?? TimeSpan.Zero;
         var position = session is null ? TimeSpan.Zero : session.IsEnded ? duration : session.Player.Position;
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        var display = handle == IntPtr.Zero ? null : System.Windows.Forms.Screen.FromHandle(handle);
         var snapshot = new OutputProgramSnapshot(CloneItem(window.CurrentProgramItem), window.IsProgramVideo,
-            session?.IsPlaying == true, session?.IsEnded == true, session?.IsStopped == true, position, duration, window.CaptureStatus);
+            session?.IsPlaying == true, session?.IsEnded == true, session?.IsStopped == true, position, duration, window.CaptureStatus, window.IsBlackActive,
+            display?.DeviceName, display?.Bounds.Width ?? 0, display?.Bounds.Height ?? 0, _testMode);
         lock (_snapshotLock) _snapshot = snapshot;
         _operatorDispatcher.BeginInvoke(new Action(() => ProgramStateChanged?.Invoke(this, EventArgs.Empty)));
     }
@@ -177,4 +182,5 @@ public sealed class OutputWindowHost
 }
 
 public sealed record OutputProgramSnapshot(MediaItem? Item, bool IsVideo, bool IsPlaying, bool IsEnded,
-    bool IsStopped, TimeSpan Position, TimeSpan Duration, string? CaptureStatus = null);
+    bool IsStopped, TimeSpan Position, TimeSpan Duration, string? CaptureStatus = null, bool IsBlackActive = false,
+    string? DisplayDevice = null, int DisplayWidth = 0, int DisplayHeight = 0, bool IsTestMode = false);

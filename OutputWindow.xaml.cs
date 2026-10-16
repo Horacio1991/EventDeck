@@ -351,27 +351,18 @@ public partial class OutputWindow : Window
         _programMirrorParent = IntPtr.Zero;
     }
 
-    public async Task BlackAsync(bool fade)
+    public bool IsBlackActive { get; private set; }
+
+    public Task ToggleBlackAsync()
     {
-        var liveCapture = _programCaptureRenderer is not null;
-        Drawing? outgoing = !fade ? null : liveCapture ? _programCaptureRenderer!.Drawing : CaptureCurrentFrame();
-        OutputWeb.Visibility = Visibility.Collapsed;
-        if (_programSession is not null) { _programSession.StateChanged -= ProgramSession_StateChanged; _programSession.Dispose(); _programSession = null; }
-        CurrentProgramItem = null;
-        _outgoingLayer = outgoing is null ? null : CreateLayer(outgoing);
-        var black = CreateLayer(CreateBlackBackground()); black.Opacity = 1; _incomingLayer = black; RebuildScene();
+        if (_captureOutputClosed) throw new InvalidOperationException("La salida está cerrada.");
+        IsBlackActive = !IsBlackActive;
+        // Cover only physical Output. Program and its mirror keep rendering normally.
+        // WebView2 owns a native child HWND: hide its parent host to avoid airspace leaks.
+        OutputWebHost.Visibility = IsBlackActive ? Visibility.Hidden : Visibility.Visible;
+        OutputBlackOverlay.Visibility = IsBlackActive ? Visibility.Visible : Visibility.Collapsed;
         ProgramStateChanged?.Invoke(this, EventArgs.Empty);
-        try
-        {
-            if (fade && _outgoingLayer is not null)
-            {
-                var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                Animate(_outgoingLayer, DrawingGroup.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(280), complete);
-                await WaitForAnimationAsync(complete.Task);
-            }
-            _outgoingLayer = null; black.Opacity = 1; RebuildScene();
-        }
-        finally { ReleaseProgramCapture(); }
+        return Task.CompletedTask;
     }
 
     private void Window_Closed(object? sender, EventArgs e)

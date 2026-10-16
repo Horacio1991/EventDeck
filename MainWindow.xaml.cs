@@ -48,10 +48,12 @@ public partial class MainWindow : Window
         InitializeComponent();
         LoadOperatorSettings();
         FadeOutHotkeyCombo.SelectedValue = _fadeOutAudioKey.ToString();
+        BlackHotkeyCombo.SelectedValue = _blackKey.ToString();
         _hotkeySettingsReady = true;
         SourceInitialized += (_, _) =>
         {
             RegisterFadeOutHotkey();
+            RegisterBlackHotkey();
             InitializeTray();
         };
         LibraryList.ItemsSource = _items;
@@ -74,7 +76,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             DisposeTray();
-            _clock.Stop(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
+            _clock.Stop(); _blackHotkey.Dispose(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
             StopAudioOpenTimeout();
             _preparedAudio?.Player.Close();
             foreach (var track in _playingTracks.ToList()) track.Player.Close();
@@ -83,16 +85,20 @@ public partial class MainWindow : Window
 
     private void DetectScreens()
     {
-        var selected = ScreenCombo.SelectedItem as ScreenChoice;
-        ScreenCombo.ItemsSource = WinForms.Screen.AllScreens.Select((screen, index) => new ScreenChoice(screen, index)).ToList();
-        if (ScreenCombo.Items.Count == 0) return;
-        ScreenCombo.SelectedIndex = selected is not null && ScreenCombo.Items.Cast<ScreenChoice>().Any(x => x.DeviceName == selected.DeviceName)
-            ? ScreenCombo.Items.Cast<ScreenChoice>().ToList().FindIndex(x => x.DeviceName == selected.DeviceName)
-            : (WinForms.Screen.AllScreens.Length > 1 ? 1 : 0);
-        if (WinForms.Screen.AllScreens.Length < 2) SetStatus("Modo de prueba: conectá un segundo monitor para usar salida fullscreen.");
+        var selectedDevice = (ScreenCombo.SelectedItem as ScreenChoice)?.DeviceName;
+        var screens = WinForms.Screen.AllScreens.Select((screen, index) => new ScreenChoice(screen, index)).ToList();
+        ScreenCombo.ItemsSource = screens;
+        ScreenCombo.SelectedItem = screens.FirstOrDefault(x => x.DeviceName == selectedDevice)
+            ?? screens.ElementAtOrDefault(screens.Count > 1 ? 1 : 0);
+        RefreshOutputStatus();
     }
 
-    private void DetectScreens_Click(object sender, RoutedEventArgs e) => DetectScreens();
+    private void DetectScreens_Click(object sender, RoutedEventArgs e)
+    {
+        DetectScreens();
+        SetStatus($"Pantallas actualizadas: {ScreenCombo.Items.Count} detectadas · {DateTime.Now:HH:mm:ss}." +
+            (_output?.IsOpen == true ? " La salida abierta conserva su ubicación." : ""));
+    }
 
     private static string OperatorSettingsPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EventDeck", "operator-settings.json");
 
@@ -104,6 +110,8 @@ public partial class MainWindow : Window
             var preferences = JsonSerializer.Deserialize<OperatorPreferences>(File.ReadAllText(OperatorSettingsPath));
             if (preferences is not null && Enum.TryParse<Key>(preferences.FadeOutAudioHotkey, true, out var key) && IsFadeOutKeyAllowed(key))
                 _fadeOutAudioKey = key;
+            if (preferences is not null && Enum.TryParse<Key>(preferences.BlackHotkey, true, out var blackKey)
+                && IsBlackKeyAllowed(blackKey) && blackKey != _fadeOutAudioKey) _blackKey = blackKey;
         }
         catch { _fadeOutAudioKey = Key.F8; }
     }
@@ -114,9 +122,9 @@ public partial class MainWindow : Window
         {
             var directory = Path.GetDirectoryName(OperatorSettingsPath)!;
             Directory.CreateDirectory(directory);
-            File.WriteAllText(OperatorSettingsPath, JsonSerializer.Serialize(new OperatorPreferences { FadeOutAudioHotkey = _fadeOutAudioKey.ToString() }, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(OperatorSettingsPath, JsonSerializer.Serialize(new OperatorPreferences { FadeOutAudioHotkey = _fadeOutAudioKey.ToString(), BlackHotkey = _blackKey.ToString() }, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch (Exception ex) { SetStatus($"No se pudo guardar la tecla de fade-out: {ex.Message}"); }
+        catch (Exception ex) { SetStatus($"No se pudo guardar la configuración de teclas: {ex.Message}"); }
     }
 
     private static bool IsFadeOutKeyAllowed(Key key) => key is Key.F8 or Key.F10 or Key.F11 or Key.F12;
@@ -126,6 +134,12 @@ public partial class MainWindow : Window
         if (!_hotkeySettingsReady || FadeOutHotkeyCombo.SelectedValue is not string keyName ||
             !Enum.TryParse<Key>(keyName, out var key) || !IsFadeOutKeyAllowed(key)) return;
         if (_fadeOutAudioKey == key) return;
+        if (key == _blackKey)
+        {
+            FadeOutHotkeyCombo.SelectedValue = _fadeOutAudioKey.ToString();
+            SetStatus($"{key} ya está asignada a BLACK. Elegí otra tecla o desactivá ese atajo.");
+            return;
+        }
         _fadeOutAudioKey = key;
         SaveOperatorSettings();
         if (_fadeOutHotkey.IsRegistered || IsLoaded) RegisterFadeOutHotkey();
@@ -144,7 +158,7 @@ public partial class MainWindow : Window
 
     private async void Output_Click(object sender, RoutedEventArgs e)
     {
-        if (_output?.IsOpen == true) { _output.Close(); _output = null; OutputButton.Content = "Abrir salida"; SetStatus("Salida cerrada."); return; }
+        if (_output?.IsOpen == true) { _output.Close(); OutputButton.Content = "Abrir salida"; RefreshOutputStatus(); SetStatus("Salida cerrada."); return; }
         if (ScreenCombo.SelectedItem is not ScreenChoice choice) { SetStatus("Windows no informa monitores disponibles."); return; }
         var testMode = WinForms.Screen.AllScreens.Length < 2;
         var output = new OutputWindowHost(Dispatcher, _captures);
@@ -152,7 +166,9 @@ public partial class MainWindow : Window
         output.ProgramStateChanged += (_, _) => RefreshProgramControls();
         output.Closed += (_, _) =>
         {
-            if (ReferenceEquals(_output, output)) _output = null;
+            if (!ReferenceEquals(_output, output)) return;
+            _output = null;
+            RefreshOutputStatus();
             OutputButton.Content = "Abrir salida"; ProgramState.Text = "NEGRO";
             ProgramImage.Source = null; ProgramImage.Visibility = Visibility.Collapsed; ProgramPlaceholder.Visibility = Visibility.Visible;
             ProgramMuteButton.IsEnabled = false; ProgramSeek.IsEnabled = false; ProgramSeek.Value = 0; ProgramPosition.Text = "00:00 / 00:00";
@@ -169,6 +185,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             _output = null; OutputButton.Content = "Abrir salida";
+            RefreshOutputStatus();
             SetStatus($"No se pudo abrir la salida: {ex.Message}");
         }
     }
@@ -364,6 +381,12 @@ public partial class MainWindow : Window
             _ = FadeOutCurrentAudioAsync();
             return;
         }
+        if (_blackKey != Key.None && e.Key == _blackKey && !_blackHotkey.IsRegistered)
+        {
+            e.Handled = true;
+            if (!e.IsRepeat) await ToggleBlackAsync();
+            return;
+        }
         if (!_libraryNavigationActive) return;
         if (e.Key is Key.Up or Key.Down)
         {
@@ -548,15 +571,7 @@ public partial class MainWindow : Window
     private async void Cut_Click(object sender, RoutedEventArgs e) => await TakeAsync(TransitionKind.Cut);
     private async void Fade_Click(object sender, RoutedEventArgs e) => await TakeAsync(TransitionKind.Fade);
     private async void Merge_Click(object sender, RoutedEventArgs e) => await TakeAsync(TransitionKind.Merge);
-    private async void Black_Click(object sender, RoutedEventArgs e)
-    {
-        if (_output is not { IsOpen: true }) { SetStatus("Abrí la salida para usar BLACK."); return; }
-        if (_takeInProgress) { SetStatus("Esperá a que termine el envío actual."); return; }
-        _takeInProgress = true;
-        try { await _output.BlackAsync(true); ProgramState.Text = "NEGRO"; UpdateProgramMonitorSurface(); ProgramMuteButton.IsEnabled = false; ProgramSeek.IsEnabled = false; ProgramPosition.Text = "00:00 / 00:00"; ProgramSeek.Value = 0; }
-        catch (Exception ex) { SetStatus("No se pudo ejecutar BLACK: " + ex.Message); }
-        finally { _takeInProgress = false; }
-    }
+    private async void Black_Click(object sender, RoutedEventArgs e) => await ToggleBlackAsync();
 
     private void PreviewPlay_Click(object sender, RoutedEventArgs e)
     {
@@ -1017,6 +1032,7 @@ public partial class MainWindow : Window
 
     private void RefreshProgramControls()
     {
+        RefreshOutputStatus();
         var snapshot = _output?.Snapshot;
         if (snapshot is not { IsVideo: true })
         {
@@ -1194,9 +1210,9 @@ public sealed class ScreenChoice
     public WinForms.Screen Screen { get; }
     public string DeviceName => Screen.DeviceName;
     public string Label { get; }
-    public ScreenChoice(WinForms.Screen screen, int index) { Screen = screen; Label = $"{(screen.Primary ? "Principal" : "Pantalla")} {index + 1}  ·  {screen.Bounds.Width}×{screen.Bounds.Height}"; }
+    public ScreenChoice(WinForms.Screen screen, int index) { Screen = screen; Label = $"{screen.DeviceName.Replace(@"\\.\", "")} · {screen.Bounds.Width}×{screen.Bounds.Height}{(screen.Primary ? " · Principal" : "")}"; }
 }
 
 public sealed class LibraryBin { public string Name { get; set; } = "GENERAL"; public ObservableCollection<MediaItem> Items { get; set; } = new(); }
 public sealed class EventProject { public string Name { get; set; } = "Evento"; public string ActiveBinName { get; set; } = "GENERAL"; public List<LibraryBin>? Bins { get; set; } = new(); public List<MediaItem> Items { get; set; } = new(); }
-public sealed class OperatorPreferences { public string FadeOutAudioHotkey { get; set; } = "F8"; }
+public sealed class OperatorPreferences { public string FadeOutAudioHotkey { get; set; } = "F8"; public string BlackHotkey { get; set; } = "None"; }
