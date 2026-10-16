@@ -48,12 +48,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         LoadOperatorSettings();
         FadeOutHotkeyCombo.SelectedValue = _fadeOutAudioKey.ToString();
-        BlackHotkeyCombo.SelectedValue = _blackKey.ToString();
         _hotkeySettingsReady = true;
         SourceInitialized += (_, _) =>
         {
             RegisterFadeOutHotkey();
-            RegisterBlackHotkey();
             InitializeTray();
         };
         LibraryList.ItemsSource = _items;
@@ -76,7 +74,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             DisposeTray();
-            _clock.Stop(); _blackHotkey.Dispose(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
+            _clock.Stop(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
             StopAudioOpenTimeout();
             _preparedAudio?.Player.Close();
             foreach (var track in _playingTracks.ToList()) track.Player.Close();
@@ -110,8 +108,6 @@ public partial class MainWindow : Window
             var preferences = JsonSerializer.Deserialize<OperatorPreferences>(File.ReadAllText(OperatorSettingsPath));
             if (preferences is not null && Enum.TryParse<Key>(preferences.FadeOutAudioHotkey, true, out var key) && IsFadeOutKeyAllowed(key))
                 _fadeOutAudioKey = key;
-            if (preferences is not null && Enum.TryParse<Key>(preferences.BlackHotkey, true, out var blackKey)
-                && IsBlackKeyAllowed(blackKey) && blackKey != _fadeOutAudioKey) _blackKey = blackKey;
         }
         catch { _fadeOutAudioKey = Key.F8; }
     }
@@ -122,7 +118,7 @@ public partial class MainWindow : Window
         {
             var directory = Path.GetDirectoryName(OperatorSettingsPath)!;
             Directory.CreateDirectory(directory);
-            File.WriteAllText(OperatorSettingsPath, JsonSerializer.Serialize(new OperatorPreferences { FadeOutAudioHotkey = _fadeOutAudioKey.ToString(), BlackHotkey = _blackKey.ToString() }, new JsonSerializerOptions { WriteIndented = true }));
+            File.WriteAllText(OperatorSettingsPath, JsonSerializer.Serialize(new OperatorPreferences { FadeOutAudioHotkey = _fadeOutAudioKey.ToString() }, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex) { SetStatus($"No se pudo guardar la configuración de teclas: {ex.Message}"); }
     }
@@ -134,12 +130,6 @@ public partial class MainWindow : Window
         if (!_hotkeySettingsReady || FadeOutHotkeyCombo.SelectedValue is not string keyName ||
             !Enum.TryParse<Key>(keyName, out var key) || !IsFadeOutKeyAllowed(key)) return;
         if (_fadeOutAudioKey == key) return;
-        if (key == _blackKey)
-        {
-            FadeOutHotkeyCombo.SelectedValue = _fadeOutAudioKey.ToString();
-            SetStatus($"{key} ya está asignada a BLACK. Elegí otra tecla o desactivá ese atajo.");
-            return;
-        }
         _fadeOutAudioKey = key;
         SaveOperatorSettings();
         if (_fadeOutHotkey.IsRegistered || IsLoaded) RegisterFadeOutHotkey();
@@ -379,12 +369,6 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             _ = FadeOutCurrentAudioAsync();
-            return;
-        }
-        if (_blackKey != Key.None && e.Key == _blackKey && !_blackHotkey.IsRegistered)
-        {
-            e.Handled = true;
-            if (!e.IsRepeat) await ToggleBlackAsync();
             return;
         }
         if (!_libraryNavigationActive) return;
@@ -1215,4 +1199,4 @@ public sealed class ScreenChoice
 
 public sealed class LibraryBin { public string Name { get; set; } = "GENERAL"; public ObservableCollection<MediaItem> Items { get; set; } = new(); }
 public sealed class EventProject { public string Name { get; set; } = "Evento"; public string ActiveBinName { get; set; } = "GENERAL"; public List<LibraryBin>? Bins { get; set; } = new(); public List<MediaItem> Items { get; set; } = new(); }
-public sealed class OperatorPreferences { public string FadeOutAudioHotkey { get; set; } = "F8"; public string BlackHotkey { get; set; } = "None"; }
+public sealed class OperatorPreferences { public string FadeOutAudioHotkey { get; set; } = "F8"; }

@@ -4,15 +4,50 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="EventDeck" Width="1440" Height="900" MinWidth="960" MinHeight="560" WindowState="Maximized"
         Background="{StaticResource Bg}" Foreground="{StaticResource TextMain}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen" PreviewMouseDown="MainWindow_PreviewMouseDown" PreviewKeyDown="MainWindow_PreviewKeyDown">
-    <Grid Margin="14">
+    <Window.Resources>
+        <Style x:Key="LoopTransportToggle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="IsThreeState" Value="False"/>
+            <Setter Property="Background" Value="#202735"/>
+            <Setter Property="BorderBrush" Value="#354052"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="LoopBorder" CornerRadius="5" BorderThickness="1"
+                                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}">
+                            <Path Width="18" Height="16" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Data="M 3,9 L 3,7 C 3,4 5,3 8,3 L 19,3 M 15,0 L 19,3 L 15,6 M 21,9 L 21,11 C 21,14 19,15 16,15 L 5,15 M 9,12 L 5,15 L 9,18"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Background" Value="#254840"/>
+                                <Setter Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="LoopBorder" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="LoopBorder" Property="BorderBrush" Value="{StaticResource Accent}"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="LoopBorder" Property="BorderBrush" Value="White"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="LoopBorder" Property="Opacity" Value="0.8"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="LoopBorder" Property="Opacity" Value="0.4"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="2.35*" MinHeight="210"/>
-            <RowDefinition Height="1.15*" MinHeight="125"/>
-            <RowDefinition Height="1.5*" MinHeight="150"/>
+            <RowDefinition Height="2*" MinHeight="220"/>
+            <RowDefinition Height="0.9*" MinHeight="130"/>
+            <RowDefinition Height="2.1*" MinHeight="150"/>
         </Grid.RowDefinitions>
 
-        <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="True">
+        <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                 <Border Width="34" Height="34" CornerRadius="10" Background="#223C43" Margin="0,0,9,0"><TextBlock Text="E" Foreground="{StaticResource Accent}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                 <StackPanel><TextBlock Text="EVENTDECK" FontSize="18" FontWeight="Bold"/><TextBlock x:Name="ProjectNameText" Text="Evento sin guardar" Foreground="{StaticResource TextMuted}" FontSize="11"/></StackPanel>
@@ -30,37 +65,39 @@
             </StackPanel>
         </DockPanel>
 
-        <Grid Grid.Row="1" Margin="0,0,0,8">
+        <Grid Grid.Row="1" Margin="0,0,0,6">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="{StaticResource Panel}" CornerRadius="12" Padding="10" Margin="0,0,5,0">
+            <Border Grid.Column="0" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="0,0,5,0">
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <DockPanel Margin="2,0,2,7"><TextBlock Text="PREVIEW" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Accent}"/><TextBlock x:Name="PreviewTitle" Text="Seleccioná un recurso" Foreground="{StaticResource TextMuted}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis"/></DockPanel>
+                    <DockPanel Margin="2,0,2,4"><TextBlock Text="PREVIEW" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Accent}"/><TextBlock x:Name="PreviewTitle" Text="Seleccioná un recurso" Foreground="{StaticResource TextMuted}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis"/></DockPanel>
                     <Border Grid.Row="1" Background="#07090D" CornerRadius="8" ClipToBounds="True">
                         <Grid x:Name="PreviewHost">
                             <TextBlock x:Name="PreviewHint" Text="Elegí una imagen, video o página web de la biblioteca" Foreground="#778292" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Margin="20" TextAlignment="Center"/>
                             <Image x:Name="PreviewImage" Stretch="Uniform" Visibility="Collapsed"/>
                             <Image x:Name="PreviewVideo" Stretch="Uniform" Visibility="Collapsed"/>
                             <Border x:Name="PreviewAudioCard" Visibility="Collapsed" IsHitTestVisible="False">
+                                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="4">
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                     <TextBlock Text="♫" FontSize="64" FontWeight="Light" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
                                     <TextBlock Text="VISTA PREVIA DE AUDIO" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" Margin="0,4,0,7" />
                                     <TextBlock x:Name="PreviewAudioName" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis" TextAlignment="Center" MaxWidth="420" />
                                 </StackPanel>
+                                </Viewbox>
                             </Border>
                             <wv2:WebView2 x:Name="PreviewWeb" Visibility="Collapsed"/>
                             <Image x:Name="PreviewCapture" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False"/>
                             <TextBlock x:Name="CaptureState" Visibility="Collapsed" VerticalAlignment="Bottom" Background="#CC111720" Foreground="White" Padding="6" TextWrapping="Wrap" IsHitTestVisible="False"/>
                         </Grid>
                     </Border>
-                    <Grid Grid.Row="2" Margin="0,7,0,0">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid Grid.Row="2" Margin="0,4,0,0">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Grid Grid.Row="0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Orientation="Horizontal" Grid.Column="0">
                                 <Button x:Name="PreviewPlayButton" Content="▶" ToolTip="Reproducir preview" Click="PreviewPlay_Click" Padding="10,6" Margin="0,0,4,0"/>
                                 <Button x:Name="PreviewPauseButton" Content="Ⅱ" ToolTip="Pausar preview" Click="PreviewPause_Click" Padding="10,6" Margin="0,0,4,0"/>
                                 <Button x:Name="PreviewStopButton" Content="■" ToolTip="Detener preview" Click="PreviewStop_Click" Padding="10,6"/>
-                                <CheckBox x:Name="PreviewLoop" Content="🔁 LOOP" ToolTip="Loop (F7)" Click="PreviewLoop_Click" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0" IsEnabled="False"/>
+                                <ToggleButton x:Name="PreviewLoop" Style="{StaticResource LoopTransportToggle}" ToolTip="Repetir video (F7)" AutomationProperties.Name="Repetir video" Click="PreviewLoop_Click" VerticalAlignment="Center" Margin="8,0,0,0" IsEnabled="False"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button Content="CUT" Click="Cut_Click" Width="68" Margin="4,0" Background="#263442" Padding="9,6"/>
@@ -68,32 +105,32 @@
                                 <Button Content="MERGE" Click="Merge_Click" Width="72" Background="#35405B" Padding="9,6"/>
                             </StackPanel>
                         </Grid>
-                        <Grid Grid.Row="1" Margin="0,6,0,2">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Grid Grid.Row="1" Margin="0,3,0,2">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Button x:Name="PreviewMuteButton" Grid.Column="0" Content="🔇 AUDIO PREVIEW" Click="PreviewMute_Click" Padding="7,6" Margin="0,0,4,0" FontSize="10"/>
                             <Button x:Name="ProgramMuteButton" ToolTip="Salida con audio (F6)" Grid.Column="1" Content="🔊 SALIDA CON AUDIO" Click="ProgramMute_Click" Padding="7,6" Margin="4,0,0,0" FontSize="10" IsEnabled="False"/>
-                        </Grid>
-                        <Grid Grid.Row="2" Margin="0,2,0,0">
+                            <Grid Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBlock x:Name="PreviewCurrent" Text="00:00" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center"/>
                             <Slider x:Name="PreviewSeek" Grid.Column="1" Minimum="0" Maximum="1" ValueChanged="PreviewSeek_ValueChanged" PreviewMouseLeftButtonUp="PreviewSeek_MouseUp" Margin="8,0" Height="18"/>
                             <TextBlock x:Name="PreviewDuration" Grid.Column="2" Text="00:00" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center"/>
+                            </Grid>
                         </Grid>
                     </Grid>
                 </Grid>
             </Border>
-            <Border Grid.Column="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="10" Margin="5,0,0,0">
+            <Border Grid.Column="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="5,0,0,0">
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <DockPanel Margin="2,0,2,7"><TextBlock Text="PROGRAM  /  EN PANTALLA" FontSize="12" FontWeight="Bold"/><TextBlock x:Name="ProgramState" Text="NEGRO" Foreground="{StaticResource TextMuted}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis"/></DockPanel>
+                    <DockPanel Margin="2,0,2,4"><TextBlock Text="PROGRAM  /  EN PANTALLA" FontSize="12" FontWeight="Bold"/><TextBlock x:Name="ProgramState" Text="NEGRO" Foreground="{StaticResource TextMuted}" DockPanel.Dock="Right" TextTrimming="CharacterEllipsis"/></DockPanel>
                     <Border x:Name="ProgramMonitorFrame" Grid.Row="1" Background="#050609" CornerRadius="8" ClipToBounds="True">
                         <Grid><Image x:Name="ProgramImage" Stretch="Uniform" Visibility="Collapsed"/><StackPanel x:Name="ProgramPlaceholder" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="EVENTDECK" FontSize="25" FontWeight="Bold" Foreground="#27303C" HorizontalAlignment="Center"/><TextBlock Text="La salida pública comienza en negro" Foreground="#667181" Margin="0,7,0,0"/></StackPanel></Grid>
                     </Border>
-                    <Grid Grid.Row="2" Margin="0,6,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal"><Button x:Name="ProgramPlayButton" Content="▶" ToolTip="Reproducir Program" Click="ProgramPlay_Click" Padding="9,5" Margin="0,0,4,0"/><Button x:Name="ProgramPauseButton" Content="Ⅱ" ToolTip="Pausar Program" Click="ProgramPause_Click" Padding="9,5" Margin="0,0,4,0"/><Button x:Name="ProgramStopButton" Content="■" ToolTip="Detener Program" Click="ProgramStop_Click" Padding="9,5"/></StackPanel><TextBlock x:Name="ProgramPosition" Grid.Column="1" Text="00:00 / 00:00" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center" Margin="8,0"/><StackPanel Grid.Column="2" Orientation="Horizontal"><Button x:Name="BlackButton" Content="BLACK · OFF" Click="Black_Click" Background="#562A32" BorderBrush="#8D3C48" Padding="8,5"/><ComboBox x:Name="BlackHotkeyCombo" Width="66" Margin="5,0,0,0" SelectedValuePath="Tag" SelectionChanged="BlackHotkeyCombo_SelectionChanged" ToolTip="Tecla global para BLACK; no modifica F6/F7/F8/F9"><ComboBoxItem Content="Sin tecla" Tag="None"/><ComboBoxItem Content="F10" Tag="F10"/><ComboBoxItem Content="F11" Tag="F11"/><ComboBoxItem Content="F12" Tag="F12"/></ComboBox></StackPanel><Slider x:Name="ProgramSeek" Grid.Row="1" Grid.ColumnSpan="3" Minimum="0" Maximum="1" ValueChanged="ProgramSeek_ValueChanged" PreviewMouseLeftButtonUp="ProgramSeek_MouseUp" Margin="0,2,0,0" Height="16"/></Grid>
+                    <Grid Grid.Row="2" Margin="0,6,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal"><Button x:Name="ProgramPlayButton" Content="▶" ToolTip="Reproducir Program" Click="ProgramPlay_Click" Padding="9,5" Margin="0,0,4,0"/><Button x:Name="ProgramPauseButton" Content="Ⅱ" ToolTip="Pausar Program" Click="ProgramPause_Click" Padding="9,5" Margin="0,0,4,0"/><Button x:Name="ProgramStopButton" Content="■" ToolTip="Detener Program" Click="ProgramStop_Click" Padding="9,5"/></StackPanel><TextBlock x:Name="ProgramPosition" Grid.Column="1" Text="00:00 / 00:00" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center" Margin="8,0"/><StackPanel Grid.Column="2" Orientation="Horizontal"><Button x:Name="BlackButton" ToolTip="Cubre/descubre la salida sin detener Program ni audio" Content="BLACK · OFF" Click="Black_Click" Background="#562A32" BorderBrush="#8D3C48" Padding="8,5"/></StackPanel><Slider x:Name="ProgramSeek" Grid.Row="1" Grid.ColumnSpan="3" Minimum="0" Maximum="1" ValueChanged="ProgramSeek_ValueChanged" PreviewMouseLeftButtonUp="ProgramSeek_MouseUp" Margin="0,2,0,0" Height="16"/></Grid>
                 </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="10" Margin="0,0,0,8">
+        <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="0,0,0,6">
             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="1.7*"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Margin="0,0,8,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <DockPanel Margin="2,0,2,6"><TextBlock Text="SONANDO" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/><StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center"><Border Background="#202735" CornerRadius="5" Padding="7,4" Margin="0,0,8,0"><TextBlock x:Name="PlayingCount" Text="0 pistas" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center"/></Border><Button x:Name="FadeOutAudioButton" Content="FADE OUT" Click="FadeOutAudioButton_Click" Padding="8,4" FontSize="9" Background="#3A3030" BorderBrush="#70504B" ToolTip="Fundir y detener todo el audio de EventDeck"/><TextBlock Text="TECLA" Foreground="{StaticResource TextMuted}" FontSize="9" VerticalAlignment="Center" Margin="8,0,4,0"/><ComboBox x:Name="FadeOutHotkeyCombo" Width="58" SelectedValuePath="Content" SelectionChanged="FadeOutHotkeyCombo_SelectionChanged" VerticalAlignment="Center"><ComboBoxItem Content="F8"/><ComboBoxItem Content="F10"/><ComboBoxItem Content="F11"/><ComboBoxItem Content="F12"/></ComboBox><Button Content="LIMPIAR LISTA" Click="ClearAudioList_Click" Padding="8,4" FontSize="9" Margin="8,0,0,0"/></StackPanel></DockPanel>
@@ -116,7 +153,7 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </Grid>
-                <Border Grid.Column="1" Background="#111720" CornerRadius="9" Padding="10">
+                <Border Grid.Column="1" Background="#111720" CornerRadius="9" Padding="8">
                     <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="PREPARADO / SIGUIENTE" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Text="·" Foreground="{StaticResource TextMuted}" Margin="7,0" VerticalAlignment="Center"/><TextBlock x:Name="PreparedAudioState" Text="SIN PISTA" Foreground="{StaticResource TextMuted}" FontSize="9" VerticalAlignment="Center"/></StackPanel>
                         <StackPanel Grid.Row="1" VerticalAlignment="Center">
@@ -132,7 +169,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="3" Background="{StaticResource Panel}" CornerRadius="12" Padding="10">
+        <Border Grid.Row="3" Background="{StaticResource Panel}" CornerRadius="12" Padding="8">
             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid Grid.Column="0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="RECURSOS" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Grid.Column="1" x:Name="ItemCount" Text="  0" Foreground="{StaticResource TextMuted}" Margin="6,0,8,0" VerticalAlignment="Center" FontSize="10"/><ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"><ListBox x:Name="BinTabs" SelectionChanged="BinTabs_SelectionChanged" DisplayMemberPath="Name" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"><ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="MinWidth" Value="100"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="#202A36"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="#263A3F"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle></ListBox></ScrollViewer></Grid><StackPanel Grid.Column="1" Orientation="Horizontal" Margin="4,0,8,0"><Button Content="＋" ToolTip="Crear pestaña" Click="NewBin_Click" Padding="8,5" Margin="0,0,3,0"/><Button Content="✎" ToolTip="Renombrar pestaña" Click="RenameBin_Click" Padding="8,5" Margin="0,0,3,0"/><Button Content="🗑" ToolTip="Eliminar pestaña" Click="DeleteBin_Click" Padding="8,5"/></StackPanel><StackPanel Grid.Column="2" Orientation="Horizontal"><Button Content="＋ Archivos" Click="AddFiles_Click" Margin="0,0,6,0" Padding="9,6"/><Button Content="▣ Captura de ventana" Click="AddWindowCapture_Click" Margin="0,0,6,0" Padding="9,6"/><Button Content="Eliminar recurso" Click="Remove_Click" Padding="9,6"/></StackPanel></Grid>
                 <ListBox x:Name="LibraryList" Grid.Row="1" Background="#111720" BorderThickness="0" Foreground="{StaticResource TextMain}" FontSize="12" Padding="4" SelectionChanged="LibraryList_SelectionChanged" PreviewKeyDown="LibraryList_PreviewKeyDown" AllowDrop="True" PreviewMouseDoubleClick="LibraryList_DoubleClick" DragOver="LibraryList_DragOver" Drop="LibraryList_Drop">
