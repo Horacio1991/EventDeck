@@ -74,7 +74,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             DisposeTray();
-            _clock.Stop(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); PreviewWeb.Dispose();
+            _clock.Stop(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
             StopAudioOpenTimeout();
             _preparedAudio?.Player.Close();
             foreach (var track in _playingTracks.ToList()) track.Player.Close();
@@ -147,7 +147,7 @@ public partial class MainWindow : Window
         if (_output?.IsOpen == true) { _output.Close(); _output = null; OutputButton.Content = "Abrir salida"; SetStatus("Salida cerrada."); return; }
         if (ScreenCombo.SelectedItem is not ScreenChoice choice) { SetStatus("Windows no informa monitores disponibles."); return; }
         var testMode = WinForms.Screen.AllScreens.Length < 2;
-        var output = new OutputWindowHost(Dispatcher);
+        var output = new OutputWindowHost(Dispatcher, _captures);
         _output = output;
         output.ProgramStateChanged += (_, _) => RefreshProgramControls();
         output.Closed += (_, _) =>
@@ -312,9 +312,14 @@ public partial class MainWindow : Window
                     _previewPreparationTask = PreparePreviewVideoAsync(item);
                     await _previewPreparationTask;
                     break;
+                case MediaKind.WindowCapture:
+                    PrepareWindowCapture(item);
+                    break;
                 case MediaKind.Web:
                     CancelPreviewLoad(); _previewPreparationTask = Task.CompletedTask;
-                    await PreviewWeb.EnsureCoreWebView2Async(); PreviewWeb.Visibility = Visibility.Visible; PreviewWeb.Source = new Uri(item.Source);
+                    await PreviewWeb.EnsureCoreWebView2Async();
+                    if (!ReferenceEquals(_selected, item)) return;
+                    PreviewWeb.Visibility = Visibility.Visible; PreviewWeb.Source = new Uri(item.Source);
                     break;
             }
         }
@@ -460,6 +465,7 @@ public partial class MainWindow : Window
 
     private void CancelPreviewLoad()
     {
+        ReleasePreviewCapture();
         _previewGeneration++;
         _previewLoadCancellation?.Cancel(); _previewLoadCancellation?.Dispose(); _previewLoadCancellation = null;
         if (_previewSession is not null) { _previewSession.StateChanged -= PreviewSession_StateChanged; _previewSession.Dispose(); _previewSession = null; }
@@ -498,7 +504,7 @@ public partial class MainWindow : Window
         catch { return null; }
     }
 
-    private async Task TakeAsync(TransitionKind transition)
+    private async Task TakeCoreAsync(TransitionKind transition)
     {
         if (_selected is null) { SetStatus("Primero seleccioná un recurso visual de la biblioteca."); return; }
         if (_output is not { IsOpen: true }) { SetStatus("Abrí la salida pública antes de enviar contenido."); return; }
@@ -524,7 +530,7 @@ public partial class MainWindow : Window
             UpdateProgramMonitorSurface();
             ProgramState.Text = item.TypeLabel + "  ·  " + item.Name.ToUpperInvariant();
             UpdateProgramMuteButton(item); RefreshProgramControls();
-            if (item.Kind == MediaKind.Video)
+            if (item.Kind == MediaKind.Video && ReferenceEquals(_selected, item))
             {
                 PreviewVideo.Source = null; PreviewVideo.Visibility = Visibility.Collapsed;
                 PreviewHint.Text = "El video está reproduciéndose en PROGRAM."; PreviewHint.Visibility = Visibility.Visible;
@@ -535,7 +541,7 @@ public partial class MainWindow : Window
         {
             SetStatus($"No se pudo enviar el recurso: {ex.Message}");
             if (prepared is not null) prepared.Dispose();
-            PreviewHint.Text = $"No se pudo enviar el video: {ex.Message}"; PreviewHint.Visibility = Visibility.Visible;
+            if (ReferenceEquals(_selected, item)) { PreviewHint.Text = $"No se pudo enviar el recurso: {ex.Message}"; PreviewHint.Visibility = Visibility.Visible; }
         }
     }
 
@@ -545,7 +551,11 @@ public partial class MainWindow : Window
     private async void Black_Click(object sender, RoutedEventArgs e)
     {
         if (_output is not { IsOpen: true }) { SetStatus("Abrí la salida para usar BLACK."); return; }
-        await _output.BlackAsync(true); ProgramState.Text = "NEGRO"; UpdateProgramMonitorSurface(); ProgramMuteButton.IsEnabled = false; ProgramSeek.IsEnabled = false; ProgramPosition.Text = "00:00 / 00:00"; ProgramSeek.Value = 0;
+        if (_takeInProgress) { SetStatus("Esperá a que termine el envío actual."); return; }
+        _takeInProgress = true;
+        try { await _output.BlackAsync(true); ProgramState.Text = "NEGRO"; UpdateProgramMonitorSurface(); ProgramMuteButton.IsEnabled = false; ProgramSeek.IsEnabled = false; ProgramPosition.Text = "00:00 / 00:00"; ProgramSeek.Value = 0; }
+        catch (Exception ex) { SetStatus("No se pudo ejecutar BLACK: " + ex.Message); }
+        finally { _takeInProgress = false; }
     }
 
     private void PreviewPlay_Click(object sender, RoutedEventArgs e)
@@ -933,6 +943,7 @@ public partial class MainWindow : Window
 
     private void RefreshPlaybackClocks()
     {
+        RefreshCaptureControls();
         foreach (var track in _playingTracks)
         {
             if (!track.Player.NaturalDuration.HasTimeSpan) continue;
@@ -1116,7 +1127,11 @@ public partial class MainWindow : Window
         e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
         e.Handled = true;
     }
-    private void UpdateCount() => ItemCount.Text = $"  {_items.Count} recursos";
+    private void UpdateCount()
+    {
+        ItemCount.Text = $"  {_items.Count} recursos";
+        _captures.SetResourceBindings(_bins.SelectMany(bin => bin.Items).Select(item => item.CaptureBinding));
+    }
     private void UpdatePlayingCount() => PlayingCount.Text = $"{_playingTracks.Count(track => track.StateText == "REPRODUCIENDO")} sonando";
     private void SetStatus(string message) => Title = "EventDeck  ·  " + message;
     private static string FormatTime(TimeSpan value) => $"{(int)value.TotalMinutes:00}:{value.Seconds:00}";
@@ -1166,8 +1181,9 @@ public partial class MainWindow : Window
             PreparedAudioTitle.Text = "Elegí una canción en la biblioteca"; PreparedAudioState.Text = "SIN PISTA";
             PreparedAudioDuration.Text = "Duración: --:--"; PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
             _selected = null; UpdateCount();
-            var missing = _bins.SelectMany(b => b.Items).Count(item => item.Kind != MediaKind.Web && !File.Exists(item.Source));
-            SetStatus(missing == 0 ? "Evento abierto." : $"Evento abierto. Hay {missing} archivo(s) que no se encuentran en su ruta guardada.");
+            var missing = _bins.SelectMany(b => b.Items).Count(item => item.Kind != MediaKind.Web && item.Kind != MediaKind.WindowCapture && !File.Exists(item.Source));
+            var unlinked = _bins.SelectMany(b => b.Items).Count(item => item.Kind == MediaKind.WindowCapture);
+            SetStatus(unlinked > 0 ? $"Evento abierto. {unlinked} captura(s) NO VINCULADA(S); agregá las ventanas nuevamente. Archivos faltantes: {missing}." : missing == 0 ? "Evento abierto." : $"Evento abierto. Hay {missing} archivo(s) que no se encuentran en su ruta guardada.");
         }
         catch (Exception ex) { SetStatus($"No se pudo abrir el evento: {ex.Message}"); }
     }

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace EventDeck;
 
-public enum MediaKind { Image, Video, Audio, Web }
+public enum MediaKind { Image, Video, Audio, Web, WindowCapture }
 
 public sealed class MediaItem
 {
@@ -11,9 +11,12 @@ public sealed class MediaItem
     public MediaKind Kind { get; set; }
     public bool ProgramMuted { get; set; }
     public bool Loop { get; set; }
+    public WindowCaptureDescriptor? Capture { get; set; }
     [JsonIgnore]
-    public string TypeLabel => Kind switch { MediaKind.Image => "IMAGEN", MediaKind.Video => "VIDEO", MediaKind.Audio => "AUDIO", _ => "WEB" };
+    internal WindowCaptureBinding? CaptureBinding { get; set; }
     [JsonIgnore]
-    public string Glyph => Kind switch { MediaKind.Image => "▧", MediaKind.Video => "▶", MediaKind.Audio => "♫", _ => "◎" };
+    public string TypeLabel => Kind switch { MediaKind.Image => "IMAGEN", MediaKind.Video => "VIDEO", MediaKind.Audio => "AUDIO", MediaKind.WindowCapture => "CAPTURA", _ => "WEB" };
+    [JsonIgnore]
+    public string Glyph => Kind switch { MediaKind.Image => "▧", MediaKind.Video => "▶", MediaKind.Audio => "♫", MediaKind.WindowCapture => "▣", _ => "◎" };
     public override string ToString() => $"{Glyph}   {Name}   ·   {TypeLabel}";
 }

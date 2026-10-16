@@ -7,6 +7,8 @@ namespace EventDeck;
 public sealed class OutputWindowHost
 {
     private readonly Dispatcher _operatorDispatcher;
+    private readonly WindowCaptureRegistry _captures;
+    private readonly SemaphoreSlim _sceneCommands = new(1, 1);
     private readonly object _snapshotLock = new();
     private Thread? _thread;
     private Dispatcher? _outputDispatcher;
@@ -23,7 +25,7 @@ public sealed class OutputWindowHost
     public bool IsProgramVideo => Snapshot.IsVideo;
     public bool IsProgramEnded => Snapshot.IsEnded;
 
-    public OutputWindowHost(Dispatcher operatorDispatcher) => _operatorDispatcher = operatorDispatcher;
+    internal OutputWindowHost(Dispatcher operatorDispatcher, WindowCaptureRegistry captures) { _operatorDispatcher = operatorDispatcher; _captures = captures; }
 
     public Task OpenAsync(bool testMode, double left, double top, double width, double height)
     {
@@ -88,17 +90,29 @@ public sealed class OutputWindowHost
 
     public async Task ShowItemAsync(MediaItem item, string? webSnapshotPath, TransitionKind transition)
     {
-        var dispatcher = GetDispatcher();
         var itemCopy = CloneItem(item)!;
-        var operation = dispatcher.InvokeAsync(() => _window!.ShowItemAsync(itemCopy, webSnapshotPath, transition));
-        await operation.Task.Unwrap();
+        await _sceneCommands.WaitAsync();
+        try
+        {
+            var dispatcher = GetDispatcher();
+            var operation = dispatcher.InvokeAsync(() => itemCopy.Kind == MediaKind.WindowCapture
+                ? _window!.ShowCaptureItemAsync(itemCopy, _captures, transition)
+                : _window!.ShowItemAsync(itemCopy, webSnapshotPath, transition));
+            await operation.Task.Unwrap();
+        }
+        finally { _sceneCommands.Release(); }
     }
 
     public async Task BlackAsync(bool fade)
     {
-        var dispatcher = GetDispatcher();
-        var operation = dispatcher.InvokeAsync(() => _window!.BlackAsync(fade));
-        await operation.Task.Unwrap();
+        await _sceneCommands.WaitAsync();
+        try
+        {
+            var dispatcher = GetDispatcher();
+            var operation = dispatcher.InvokeAsync(() => _window!.BlackAsync(fade));
+            await operation.Task.Unwrap();
+        }
+        finally { _sceneCommands.Release(); }
     }
 
     public void SetProgramMirrorBounds(IntPtr parentWindow, int x, int y, int width, int height) =>
@@ -145,7 +159,7 @@ public sealed class OutputWindowHost
         var duration = session?.Duration ?? TimeSpan.Zero;
         var position = session is null ? TimeSpan.Zero : session.IsEnded ? duration : session.Player.Position;
         var snapshot = new OutputProgramSnapshot(CloneItem(window.CurrentProgramItem), window.IsProgramVideo,
-            session?.IsPlaying == true, session?.IsEnded == true, session?.IsStopped == true, position, duration);
+            session?.IsPlaying == true, session?.IsEnded == true, session?.IsStopped == true, position, duration, window.CaptureStatus);
         lock (_snapshotLock) _snapshot = snapshot;
         _operatorDispatcher.BeginInvoke(new Action(() => ProgramStateChanged?.Invoke(this, EventArgs.Empty)));
     }
@@ -156,9 +170,11 @@ public sealed class OutputWindowHost
         Source = item.Source,
         Kind = item.Kind,
         ProgramMuted = item.ProgramMuted,
-        Loop = item.Loop
+        Loop = item.Loop,
+        Capture = item.Capture,
+        CaptureBinding = item.CaptureBinding
     };
 }
 
 public sealed record OutputProgramSnapshot(MediaItem? Item, bool IsVideo, bool IsPlaying, bool IsEnded,
-    bool IsStopped, TimeSpan Position, TimeSpan Duration);
+    bool IsStopped, TimeSpan Position, TimeSpan Duration, string? CaptureStatus = null);

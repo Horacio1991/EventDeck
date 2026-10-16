@@ -56,6 +56,7 @@ public partial class OutputWindow : Window
 
     public async Task ShowItemAsync(MediaItem item, string? webSnapshotPath, TransitionKind transition)
     {
+        if (_captureOutputClosed) throw new InvalidOperationException("La salida está cerrada.");
         if (item.Kind == MediaKind.Video)
         {
             var preparedVideo = new VideoSession(new Uri(item.Source), item.Loop);
@@ -72,7 +73,8 @@ public partial class OutputWindow : Window
             return;
         }
 
-        var outgoing = transition == TransitionKind.Cut ? null : CaptureCurrentFrame();
+        Drawing? outgoing = transition == TransitionKind.Cut ? null
+            : _programCaptureRenderer is not null ? _programCaptureRenderer.Drawing : CaptureCurrentFrame();
         OutputWeb.Visibility = Visibility.Collapsed;
         var previous = _programSession;
         _programSession = null;
@@ -104,6 +106,7 @@ public partial class OutputWindow : Window
         if (transition == TransitionKind.Cut)
         {
             _incomingLayer.Opacity = 1;
+            ReleaseProgramCapture();
             _programSession?.Play();
             return;
         }
@@ -121,6 +124,7 @@ public partial class OutputWindow : Window
         _incomingLayer.Opacity = 1;
         _outgoingLayer = null;
         RebuildScene();
+        ReleaseProgramCapture();
         _programSession?.Play();
         ProgramStateChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -130,7 +134,9 @@ public partial class OutputWindow : Window
         var previousSession = _programSession;
         var previousLayer = _incomingLayer;
         DrawingGroup? outgoingLayer;
-        if (previousSession is not null)
+        if (_programCaptureRenderer is not null)
+            outgoingLayer = CreateLayer(_programCaptureRenderer.Drawing);
+        else if (previousSession is not null)
             outgoingLayer = CreateLayer(previousSession.Drawing);
         else
         {
@@ -161,6 +167,7 @@ public partial class OutputWindow : Window
             // the separate gate that decides whether the public output is audible.
             incomingSession.Player.Volume = 1;
             await incomingSession.StartForPresentationAsync(CancellationToken.None);
+            if (_captureOutputClosed) throw new InvalidOperationException("La salida se cerró durante la preparación.");
         }
         catch
         {
@@ -204,6 +211,7 @@ public partial class OutputWindow : Window
         }
 
         incomingSession.Player.IsMuted = item.ProgramMuted;
+        ReleaseProgramCapture();
 
         if (previousSession is not null && !ReferenceEquals(previousSession, incomingSession))
             previousSession.Dispose();
@@ -260,7 +268,7 @@ public partial class OutputWindow : Window
         var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         Animate(outgoing, DrawingGroup.OpacityProperty, 1, 0, duration, easing: easing);
         Animate(incoming, DrawingGroup.OpacityProperty, 0, 1, duration, complete, easing);
-        await complete.Task;
+        await WaitForAnimationAsync(complete.Task);
     }
 
     private Task RevealFromBlackAsync(int milliseconds)
@@ -269,7 +277,7 @@ public partial class OutputWindow : Window
         incoming.Opacity = 0;
         var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         Animate(incoming, DrawingGroup.OpacityProperty, 0, 1, TimeSpan.FromMilliseconds(milliseconds), complete);
-        return complete.Task;
+        return WaitForAnimationAsync(complete.Task);
     }
 
     private static void Animate(Animatable target, DependencyProperty property, double from, double to, TimeSpan duration, TaskCompletionSource<bool>? complete = null, IEasingFunction? easing = null)
@@ -343,24 +351,35 @@ public partial class OutputWindow : Window
         _programMirrorParent = IntPtr.Zero;
     }
 
-    public Task BlackAsync(bool fade)
+    public async Task BlackAsync(bool fade)
     {
-        var outgoing = fade ? CaptureCurrentFrame() : null;
+        var liveCapture = _programCaptureRenderer is not null;
+        Drawing? outgoing = !fade ? null : liveCapture ? _programCaptureRenderer!.Drawing : CaptureCurrentFrame();
         OutputWeb.Visibility = Visibility.Collapsed;
         if (_programSession is not null) { _programSession.StateChanged -= ProgramSession_StateChanged; _programSession.Dispose(); _programSession = null; }
         CurrentProgramItem = null;
         _outgoingLayer = outgoing is null ? null : CreateLayer(outgoing);
         var black = CreateLayer(CreateBlackBackground()); black.Opacity = 1; _incomingLayer = black; RebuildScene();
         ProgramStateChanged?.Invoke(this, EventArgs.Empty);
-        if (!fade || _outgoingLayer is null) { _outgoingLayer = null; RebuildScene(); return Task.CompletedTask; }
-        var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        Animate(_outgoingLayer, DrawingGroup.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(280), complete);
-        _ = complete.Task.ContinueWith(_ => Dispatcher.BeginInvoke(new Action(() => { _outgoingLayer = null; RebuildScene(); })), TaskScheduler.Default);
-        return complete.Task;
+        try
+        {
+            if (fade && _outgoingLayer is not null)
+            {
+                var complete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Animate(_outgoingLayer, DrawingGroup.OpacityProperty, 1, 0, TimeSpan.FromMilliseconds(280), complete);
+                await WaitForAnimationAsync(complete.Task);
+            }
+            _outgoingLayer = null; black.Opacity = 1; RebuildScene();
+        }
+        finally { ReleaseProgramCapture(); }
     }
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _captureOutputClosed = true;
+        _outputClosed.TrySetResult(true);
+        ReleaseTransitionSources();
+        ReleaseProgramCapture();
         DisposeProgramMirror();
         if (_programSession is not null) { _programSession.StateChanged -= ProgramSession_StateChanged; _programSession.Dispose(); _programSession = null; }
         OutputWeb.Dispose();
