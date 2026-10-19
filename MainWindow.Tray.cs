@@ -25,7 +25,7 @@ public partial class MainWindow
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
             Text = "EventDeck · F9 mostrar/ocultar",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!)!,
             ContextMenuStrip = _trayMenu,
             Visible = false
         };
