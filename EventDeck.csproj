@@ -4,16 +4,19 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <PlatformTarget>x64</PlatformTarget>
+    <Version>0.7.1</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>Assets\EventDeck.ico</ApplicationIcon>
     <AssemblyName>EventDeck</AssemblyName>
     <RootNamespace>EventDeck</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets\EventDeck.ico" />
+    <Resource Include="Assets\EventDeck-Icon-64.png" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageReference Include="Vortice.Direct3D11" Version="[3.8.3]" />
   </ItemGroup>

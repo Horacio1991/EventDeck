@@ -3,6 +3,6 @@
         <TextBlock Text="AGREGAR PÁGINA WEB" FontSize="15" FontWeight="Bold" Margin="0,0,0,15"/>
         <StackPanel Grid.Row="1" Margin="0,0,0,12"><TextBlock Text="NOMBRE" Foreground="#9AA5B5" FontSize="10" Margin="0,0,0,5"/><TextBox x:Name="NameBox"/></StackPanel>
         <StackPanel Grid.Row="2"><TextBlock Text="URL" Foreground="#9AA5B5" FontSize="10" Margin="0,0,0,5"/><TextBox x:Name="UrlBox" Text="https://"/></StackPanel>
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom"><Button Content="Cancelar" IsCancel="True" Margin="0,0,8,0" Click="Cancel_Click"/><Button Content="Agregar a preview" Background="#254840" BorderBrush="#38776B" IsDefault="True" Click="Add_Click"/></StackPanel>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom"><Button Content="Cancelar" IsCancel="True" Margin="0,0,8,0" Click="Cancel_Click"/><Button Content="Agregar a preview" Background="{StaticResource AccentSecondary}" BorderBrush="{StaticResource Accent}" IsDefault="True" Click="Add_Click"/></StackPanel>
     </Grid>
 </Window>

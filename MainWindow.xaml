@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="EventDeck" Width="1440" Height="900" MinWidth="960" MinHeight="560" WindowState="Maximized"
-        Background="{StaticResource Bg}" Foreground="{StaticResource TextMain}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen" PreviewMouseDown="MainWindow_PreviewMouseDown" PreviewKeyDown="MainWindow_PreviewKeyDown">
+        Background="{StaticResource Bg}" Foreground="{StaticResource TextMain}" FontFamily="Segoe UI" WindowStartupLocation="CenterScreen" Icon="pack://application:,,,/Assets/EventDeck.ico" PreviewMouseDown="MainWindow_PreviewMouseDown" PreviewKeyDown="MainWindow_PreviewKeyDown">
     <Window.Resources>
         <Style x:Key="LoopTransportToggle" TargetType="ToggleButton">
             <Setter Property="Width" Value="34"/>
@@ -24,7 +24,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter Property="Background" Value="#254840"/>
+                                <Setter Property="Background" Value="{StaticResource AccentSecondary}"/>
                                 <Setter Property="BorderBrush" Value="{StaticResource Accent}"/>
                                 <Setter Property="Foreground" Value="{StaticResource Accent}"/>
                                 <Setter TargetName="LoopBorder" Property="BorderThickness" Value="2"/>
@@ -49,7 +49,7 @@
 
         <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                <Border Width="34" Height="34" CornerRadius="10" Background="#223C43" Margin="0,0,9,0"><TextBlock Text="E" Foreground="{StaticResource Accent}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <Border Width="34" Height="34" CornerRadius="10" Background="{StaticResource AccentSecondary}" Margin="0,0,9,0"><Image Source="pack://application:,,,/Assets/EventDeck-Icon-64.png" Width="30" Height="30" Stretch="Uniform"/></Border>
                 <StackPanel><TextBlock Text="EVENTDECK" FontSize="18" FontWeight="Bold"/><TextBlock x:Name="ProjectNameText" Text="Evento sin guardar" Foreground="{StaticResource TextMuted}" FontSize="11"/><TextBlock x:Name="EventHealthText" Text="✓ EVENTO LISTO" Foreground="LightGreen" FontSize="9" FontWeight="SemiBold" ToolTip="No se detectan archivos locales faltantes."/></StackPanel>
             </StackPanel>
             <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -57,7 +57,7 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <ComboBox x:Name="ScreenCombo" Width="210" Margin="0,0,8,0" DisplayMemberPath="Label" SelectionChanged="ScreenCombo_SelectionChanged"/>
                 <Button Content="ACTUALIZAR PANTALLAS" Click="DetectScreens_Click" Margin="0,0,6,0" Padding="10,7"/>
-                <Button x:Name="OutputButton" Content="Abrir salida" Click="Output_Click" Background="#24443F" BorderBrush="#38776B" Padding="11,7"/>
+                <Button x:Name="OutputButton" Content="Abrir salida" Click="Output_Click" Background="{StaticResource AccentSecondary}" BorderBrush="{StaticResource Accent}" Padding="11,7"/>
                 <Button Content="Abrir evento" Click="OpenProject_Click" Margin="6,0,0,0" Padding="10,7"/>
                 <Button Content="Guardar" Click="SaveProject_Click" Margin="6,0,0,0" Padding="10,7"/>
             </StackPanel>
@@ -101,7 +101,7 @@
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
                                 <Button Content="CUT" Click="Cut_Click" Width="68" Margin="4,0" Background="#263442" Padding="9,6"/>
-                                <Button Content="FADE" Click="Fade_Click" Width="68" Background="#254840" BorderBrush="#38776B" Padding="9,6"/>
+                                <Button Content="FADE" Click="Fade_Click" Width="68" Background="{StaticResource AccentSecondary}" BorderBrush="{StaticResource Accent}" Padding="9,6"/>
                                 <Button Content="MERGE" Click="Merge_Click" Width="72" Background="#35405B" Padding="9,6"/>
                             </StackPanel>
                         </Grid>
@@ -161,7 +161,7 @@
                             <TextBlock x:Name="PreparedAudioDuration" Text="Duración: --:--" Foreground="{StaticResource TextMuted}" FontSize="9"/>
                         </StackPanel>
                         <DockPanel Grid.Row="2" Margin="0,4,0,0">
-                            <StackPanel Orientation="Horizontal"><Button x:Name="PlayPreparedButton" Content="▶  PLAY" Click="PlayPreparedAudio_Click" Background="#254840" BorderBrush="#38776B" Padding="12,6" IsEnabled="False"/><Button x:Name="RemovePreparedButton" Content="✕" ToolTip="Quitar pista preparada" Click="RemovePreparedAudio_Click" Padding="8,6" Margin="4,0,0,0" IsEnabled="False"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Button x:Name="PlayPreparedButton" Content="▶  PLAY" Click="PlayPreparedAudio_Click" Background="{StaticResource AccentSecondary}" BorderBrush="{StaticResource Accent}" Padding="12,6" IsEnabled="False"/><Button x:Name="RemovePreparedButton" Content="✕" ToolTip="Quitar pista preparada" Click="RemovePreparedAudio_Click" Padding="8,6" Margin="4,0,0,0" IsEnabled="False"/></StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><TextBlock Text="VOL" Foreground="{StaticResource TextMuted}" FontSize="9" VerticalAlignment="Center"/><Slider x:Name="PreparedAudioVolume" Width="90" Minimum="0" Maximum="1" Value="0.8" Margin="6,0" ValueChanged="PreparedAudioVolume_ValueChanged"/></StackPanel>
                         </DockPanel>
                     </Grid>
@@ -178,7 +178,7 @@
                     <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False">
                         <ListBox x:Name="BinTabs" SelectionChanged="BinTabs_SelectionChanged" DisplayMemberPath="Name" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                             <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
-                            <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="MinWidth" Value="100"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="#202A36"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="#263A3F"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
+                            <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="MinWidth" Value="100"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="#202A36"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{StaticResource AccentSecondary}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
                         </ListBox>
                     </ScrollViewer>
                     <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="4,0,3,0">
@@ -217,7 +217,7 @@
                             </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
-                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="8,6"/><Setter Property="Margin" Value="2"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#202A36"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="#31575D"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
+                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="8,6"/><Setter Property="Margin" Value="2"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#202A36"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentSecondary}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
                 </ListBox>
             </Grid>
         </Border>

@@ -3,12 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="Bg" Color="#10131A" />
+        <SolidColorBrush x:Key="Bg" Color="#111417" />
         <SolidColorBrush x:Key="Panel" Color="#191E28" />
         <SolidColorBrush x:Key="Panel2" Color="#202735" />
         <SolidColorBrush x:Key="TextMain" Color="#F3F5F8" />
         <SolidColorBrush x:Key="TextMuted" Color="#9AA5B5" />
-        <SolidColorBrush x:Key="Accent" Color="#61D6C5" />
+        <SolidColorBrush x:Key="Accent" Color="#00C7C7" />
+        <SolidColorBrush x:Key="AccentSecondary" Color="#0F5F6A" />
+        <SolidColorBrush x:Key="AccentSurface" Color="#12363B" />
+        <SolidColorBrush x:Key="AccentHover" Color="#48DEDE" />
         <SolidColorBrush x:Key="Red" Color="#FF5E69" />
         <Style TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource TextMain}" />
@@ -46,8 +49,8 @@
                             <ContentPresenter />
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#263A3F" /></Trigger>
-                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="#30434A" /></Trigger>
+                            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentSurface}" /></Trigger>
+                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentSecondary}" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="#687282" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -87,8 +90,8 @@
                             </Popup>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="#61D6C5" /></Trigger>
-                            <Trigger Property="IsDropDownOpen" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="#61D6C5" /></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="{StaticResource Accent}" /></Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True"><Setter TargetName="ComboBorder" Property="BorderBrush" Value="{StaticResource Accent}" /></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ComboBorder" Property="Opacity" Value="0.55" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -110,8 +113,8 @@
                                             <ControlTemplate TargetType="{x:Type Thumb}">
                                                 <Border x:Name="ThumbBorder" Background="#465366" CornerRadius="5" Margin="1" />
                                                 <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbBorder" Property="Background" Value="#61D6C5" /></Trigger>
-                                                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbBorder" Property="Background" Value="#7CE6D6" /></Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource Accent}" /></Trigger>
+                                                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource AccentHover}" /></Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Thumb.Template>
