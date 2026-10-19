@@ -46,6 +46,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _eventManagementReady = true;
         LoadOperatorSettings();
         FadeOutHotkeyCombo.SelectedValue = _fadeOutAudioKey.ToString();
         _hotkeySettingsReady = true;
@@ -56,7 +57,7 @@ public partial class MainWindow : Window
         };
         LibraryList.ItemsSource = _items;
         _activeBin = new LibraryBin { Name = "GENERAL" }; _bins.Add(_activeBin); _items = _activeBin.Items;
-        LibraryList.ItemsSource = _items; BinTabs.ItemsSource = _bins; BinTabs.SelectedItem = _activeBin;
+        AttachResourceView(); BinTabs.ItemsSource = _bins; BinTabs.SelectedItem = _activeBin;
         AudioPlayingList.ItemsSource = _playingTracks;
         DetectScreens();
         ProgramSeek.IsEnabled = false;
@@ -273,7 +274,23 @@ public partial class MainWindow : Window
 
     private async void LibraryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (LibraryList.SelectedItem is not MediaItem item) return;
+        if (LibraryList.SelectedItem is not MediaItem item) { RefreshEventHealth(); return; }
+        if (item.IsMissing)
+        {
+            StopAudioPreview();
+            _selected = item;
+            CancelPreviewLoad(); _previewPreparationTask = Task.CompletedTask;
+            PreviewTitle.Text = item.Name;
+            PreviewAudioCard.Visibility = Visibility.Collapsed;
+            PreviewImage.Visibility = Visibility.Collapsed; PreviewVideo.Source = null; PreviewVideo.Visibility = Visibility.Collapsed;
+            PreviewWeb.Visibility = Visibility.Collapsed;
+            PreviewHint.Text = "ARCHIVO NO ENCONTRADO\nRevinculá este recurso para volver a utilizarlo.";
+            PreviewHint.Visibility = Visibility.Visible;
+            PreviewLoop.IsEnabled = false; PreviewLoop.IsChecked = false;
+            PreviewMuteButton.IsEnabled = false; PreviewSeek.IsEnabled = false;
+            UpdateProgramMuteButton(null); RefreshProgramControls(); RefreshEventHealth();
+            return;
+        }
         if (item.Kind == MediaKind.Audio)
         {
             StopAudioPreview();
@@ -986,31 +1003,31 @@ public partial class MainWindow : Window
     private void BinTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressBinSelection || BinTabs.SelectedItem is not LibraryBin bin || ReferenceEquals(_activeBin, bin)) return;
-        _activeBin = bin; _items = bin.Items; LibraryList.ItemsSource = _items; LibraryList.SelectedItem = null; UpdateCount();
+        _activeBin = bin; _items = bin.Items; AttachResourceView(); LibraryList.SelectedItem = null; UpdateCount();
     }
 
     private void NewBin_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new BinNameDialog("Crear bin") { Owner = this };
+        var dialog = new BinNameDialog("Agregar pestaña") { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        if (_bins.Any(b => b.Name.Equals(dialog.BinName, StringComparison.OrdinalIgnoreCase))) { SetStatus("Ya existe un bin con ese nombre."); return; }
+        if (_bins.Any(b => b.Name.Equals(dialog.BinName, StringComparison.OrdinalIgnoreCase))) { SetStatus("Ya existe una pestaña con ese nombre."); return; }
         var bin = new LibraryBin { Name = dialog.BinName }; _bins.Add(bin); BinTabs.SelectedItem = bin;
     }
 
     private void RenameBin_Click(object sender, RoutedEventArgs e)
     {
         if (_activeBin is null) return;
-        var dialog = new BinNameDialog("Renombrar bin", _activeBin.Name) { Owner = this };
+        var dialog = new BinNameDialog("Renombrar pestaña", _activeBin.Name) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        if (_bins.Any(b => !ReferenceEquals(b, _activeBin) && b.Name.Equals(dialog.BinName, StringComparison.OrdinalIgnoreCase))) { SetStatus("Ya existe un bin con ese nombre."); return; }
+        if (_bins.Any(b => !ReferenceEquals(b, _activeBin) && b.Name.Equals(dialog.BinName, StringComparison.OrdinalIgnoreCase))) { SetStatus("Ya existe una pestaña con ese nombre."); return; }
         _activeBin.Name = dialog.BinName; var selected = _activeBin; BinTabs.ItemsSource = null; BinTabs.ItemsSource = _bins; BinTabs.SelectedItem = selected;
     }
 
     private void DeleteBin_Click(object sender, RoutedEventArgs e)
     {
         if (_activeBin is null) return;
-        if (_bins.Count == 1) { SetStatus("El evento debe conservar al menos un bin."); return; }
-        if (System.Windows.MessageBox.Show(this, $"¿Eliminar el bin ‘{_activeBin.Name}’ y sus referencias a recursos? Los archivos originales no se borran.", "Eliminar bin", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (_bins.Count == 1) { SetStatus("El evento debe conservar al menos una pestaña."); return; }
+        if (System.Windows.MessageBox.Show(this, $"¿Eliminar la pestaña ‘{_activeBin.Name}’ y sus referencias a recursos? Los archivos originales no se borran.", "Eliminar pestaña", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         var index = _bins.IndexOf(_activeBin); _bins.Remove(_activeBin); BinTabs.SelectedItem = _bins[Math.Max(0, index - 1)];
     }
 
@@ -1119,18 +1136,31 @@ public partial class MainWindow : Window
 
     private void LibraryList_Drop(object sender, System.Windows.DragEventArgs e)
     {
-        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files) foreach (var file in files) AddPath(file);
+        if (e.Data.GetData("EventDeck.ResourceItem") is MediaItem dragged)
+        {
+            ReorderResource(dragged, GetResourceAtPoint(e));
+            e.Effects = System.Windows.DragDropEffects.Move;
+        }
+        else if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files)
+        {
+            foreach (var file in files) AddPath(file);
+            e.Effects = System.Windows.DragDropEffects.Copy;
+        }
         UpdateCount();
+        e.Handled = true;
     }
     private void LibraryList_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        e.Effects = e.Data.GetDataPresent("EventDeck.ResourceItem") ? System.Windows.DragDropEffects.Move
+            : e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy
+            : System.Windows.DragDropEffects.None;
         e.Handled = true;
     }
     private void UpdateCount()
     {
-        ItemCount.Text = $"  {_items.Count} recursos";
+        UpdateResourceCountLabel();
         _captures.SetResourceBindings(_bins.SelectMany(bin => bin.Items).Select(item => item.CaptureBinding));
+        RefreshResourceView();
     }
     private void UpdatePlayingCount() => PlayingCount.Text = $"{_playingTracks.Count(track => track.StateText == "REPRODUCIENDO")} sonando";
     private void SetStatus(string message) => Title = "EventDeck  ·  " + message;
@@ -1167,11 +1197,15 @@ public partial class MainWindow : Window
             _bins.Clear();
             var loadedBins = project.Bins?.Where(b => !string.IsNullOrWhiteSpace(b.Name)).ToList() ?? new List<LibraryBin>();
             if (loadedBins.Count == 0) loadedBins.Add(new LibraryBin { Name = "GENERAL", Items = new ObservableCollection<MediaItem>(project.Items ?? new List<MediaItem>()) });
-            foreach (var bin in loadedBins) _bins.Add(bin);
+            foreach (var bin in loadedBins)
+            {
+                RemoveLegacySectionItems(bin.Items);
+                _bins.Add(bin);
+            }
             _activeBin = _bins.FirstOrDefault(b => b.Name.Equals(project.ActiveBinName, StringComparison.OrdinalIgnoreCase)) ?? _bins[0];
             _suppressBinSelection = true;
             BinTabs.ItemsSource = null; BinTabs.ItemsSource = _bins; BinTabs.SelectedItem = _activeBin;
-            _items = _activeBin.Items; LibraryList.ItemsSource = _items;
+            _items = _activeBin.Items; AttachResourceView();
             _suppressBinSelection = false;
             _projectPath = dialog.FileName; _projectName = project.Name; ProjectNameText.Text = project.Name;
             PreviewImage.Visibility = Visibility.Collapsed; PreviewVideo.Visibility = Visibility.Collapsed; PreviewWeb.Visibility = Visibility.Collapsed;
@@ -1180,12 +1214,25 @@ public partial class MainWindow : Window
             PreviewTitle.Text = "Seleccioná un recurso"; PreviewSeek.Value = 0; PreviewCurrent.Text = "00:00"; PreviewDuration.Text = "00:00";
             PreparedAudioTitle.Text = "Elegí una canción en la biblioteca"; PreparedAudioState.Text = "SIN PISTA";
             PreparedAudioDuration.Text = "Duración: --:--"; PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
-            _selected = null; UpdateCount();
-            var missing = _bins.SelectMany(b => b.Items).Count(item => item.Kind != MediaKind.Web && item.Kind != MediaKind.WindowCapture && !File.Exists(item.Source));
+            _selected = null;
+            ResourceSearchBox.Text = ""; ResourceKindFilter.SelectedIndex = 0;
+            UpdateCount();
+            var missing = _bins.SelectMany(b => b.Items).Count(item => item.IsMissing);
             var unlinked = _bins.SelectMany(b => b.Items).Count(item => item.Kind == MediaKind.WindowCapture);
             SetStatus(unlinked > 0 ? $"Evento abierto. {unlinked} captura(s) NO VINCULADA(S); agregá las ventanas nuevamente. Archivos faltantes: {missing}." : missing == 0 ? "Evento abierto." : $"Evento abierto. Hay {missing} archivo(s) que no se encuentran en su ruta guardada.");
+            if (missing > 0)
+                System.Windows.MessageBox.Show(this, $"El evento contiene {missing} archivo(s) local(es) que no están disponibles.\n\nLos recursos permanecerán en el evento, pero no podrán utilizarse hasta revincularlos. El resto del evento se abrió normalmente.",
+                    "Recursos no encontrados", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex) { SetStatus($"No se pudo abrir el evento: {ex.Message}"); }
+    }
+
+    private static void RemoveLegacySectionItems(ObservableCollection<MediaItem> items)
+    {
+        // FIX1/FIX2 serialized the temporary Section kind as enum value 5.
+        // Discard only those separators when loading so older FIX1/FIX2 events remain usable.
+        for (var index = items.Count - 1; index >= 0; index--)
+            if ((int)items[index].Kind == 5) items.RemoveAt(index);
     }
 }
 

@@ -1,0 +1,30 @@
+EventDeck v0.7 FIX3 — validación de entrega
+
+Base revisada
+- ZIP de entrada: EventDeck-v0.7-EVENT-MANAGEMENT-FIX2(2).zip.
+- Referencia de pestañas: commit ed92eb5816adf48968bb2b646113985906952aab, rama `v0.6-presentations`, tag `v0.6C-ui-ergonomics`.
+- No se modificó GitHub ni se creó commit, push o tag.
+
+Validación técnica
+- `dotnet restore --locked-mode` — correcta.
+- `dotnet build -c Release` — correcta, 0 warnings y 0 errores.
+- No hay proyectos ni archivos de tests automatizados en el ZIP base.
+- XAML parseable y compilado durante el build.
+- En Linux no se puede iniciar ni interactuar con la ventana WPF de Windows. La validación física queda para Windows.
+
+Revisión de compatibilidad y alcance
+- Las pestañas, sus nombres, su orden y sus recursos siguen usando el modelo `LibraryBin` y la persistencia `Bins`/`ActiveBinName` existente de v0.6C.
+- Al abrir archivos FIX1/FIX2, se quitan de cada bin los separadores temporales con valor enum 5. Los recursos restantes conservan su orden; al guardar, el evento queda sin esos separadores.
+- Búsqueda y filtros siguen usando únicamente la colección de la pestaña activa. El estado de faltantes sigue contando los recursos de todos los bins.
+- Los 13 archivos protegidos y `OutputWindow.xaml`, `OutputWindow.xaml.cs`, `OutputWindowHost.cs` permanecen byte-identical al ZIP base.
+
+Pruebas físicas recomendadas en Windows
+1. Crear GENERAL, VIDEOS, VISUALES y MÚSICA; agregar recursos diferentes y confirmar que cada pestaña muestra solo los suyos.
+2. Renombrar una pestaña y confirmar que sus recursos y orden no cambian. Eliminar un bin con confirmación y comprobar que los archivos originales no se borran; verificar que el último bin no se puede eliminar.
+3. Guardar, cerrar y reabrir un evento v0.6C; confirmar pestañas, nombres, recursos y orden.
+4. Abrir un evento FIX1/FIX2 que tenga separadores “Sección”; confirmar que abre sin error, conserva recursos y no muestra separadores. Guardarlo y volverlo a abrir.
+5. Probar búsqueda, cada filtro y búsqueda combinada con filtro en dos pestañas; cambiar de pestaña y limpiar filtros.
+6. Colocar un archivo faltante en una pestaña no activa; confirmar que el indicador global lo detecta, que se ve al entrar al bin y que revincularlo actualiza estado y ruta.
+7. Confirmar icono + nombre + tipo para audio, imagen, video y captura.
+8. Crear y renombrar pestañas con texto corto y largo; confirmar que el diálogo indica “Agregar pestaña” o “Renombrar pestaña” y que el texto queda centrado y sin clipping.
+9. Comprobar Preview, Program, transiciones, audio, video, Window Capture, BLACK, hotkeys y bandeja en el equipo habitual.

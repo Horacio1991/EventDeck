@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json.Serialization;
 
 namespace EventDeck;
@@ -14,6 +15,8 @@ public sealed class MediaItem
     public WindowCaptureDescriptor? Capture { get; set; }
     [JsonIgnore]
     internal WindowCaptureBinding? CaptureBinding { get; set; }
+    [JsonIgnore]
+    public bool IsMissing => Kind is MediaKind.Image or MediaKind.Video or MediaKind.Audio && !string.IsNullOrWhiteSpace(Source) && !File.Exists(Source);
     [JsonIgnore]
     public string TypeLabel => Kind switch { MediaKind.Image => "IMAGEN", MediaKind.Video => "VIDEO", MediaKind.Audio => "AUDIO", MediaKind.WindowCapture => "CAPTURA", _ => "WEB" };
     [JsonIgnore]

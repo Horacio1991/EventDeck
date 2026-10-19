@@ -50,7 +50,7 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                 <Border Width="34" Height="34" CornerRadius="10" Background="#223C43" Margin="0,0,9,0"><TextBlock Text="E" Foreground="{StaticResource Accent}" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                <StackPanel><TextBlock Text="EVENTDECK" FontSize="18" FontWeight="Bold"/><TextBlock x:Name="ProjectNameText" Text="Evento sin guardar" Foreground="{StaticResource TextMuted}" FontSize="11"/></StackPanel>
+                <StackPanel><TextBlock Text="EVENTDECK" FontSize="18" FontWeight="Bold"/><TextBlock x:Name="ProjectNameText" Text="Evento sin guardar" Foreground="{StaticResource TextMuted}" FontSize="11"/><TextBlock x:Name="EventHealthText" Text="✓ EVENTO LISTO" Foreground="LightGreen" FontSize="9" FontWeight="SemiBold" ToolTip="No se detectan archivos locales faltantes."/></StackPanel>
             </StackPanel>
             <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="OutputStatusText" Text="SALIDA INACTIVA" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right" Margin="0,0,0,4"/>
@@ -171,8 +171,52 @@
 
         <Border Grid.Row="3" Background="{StaticResource Panel}" CornerRadius="12" Padding="8">
             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Grid Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><Grid Grid.Column="0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="RECURSOS" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Grid.Column="1" x:Name="ItemCount" Text="  0" Foreground="{StaticResource TextMuted}" Margin="6,0,8,0" VerticalAlignment="Center" FontSize="10"/><ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False"><ListBox x:Name="BinTabs" SelectionChanged="BinTabs_SelectionChanged" DisplayMemberPath="Name" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"><ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="MinWidth" Value="100"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="#202A36"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="#263A3F"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle></ListBox></ScrollViewer></Grid><StackPanel Grid.Column="1" Orientation="Horizontal" Margin="4,0,8,0"><Button Content="＋" ToolTip="Crear pestaña" Click="NewBin_Click" Padding="8,5" Margin="0,0,3,0"/><Button Content="✎" ToolTip="Renombrar pestaña" Click="RenameBin_Click" Padding="8,5" Margin="0,0,3,0"/><Button Content="🗑" ToolTip="Eliminar pestaña" Click="DeleteBin_Click" Padding="8,5"/></StackPanel><StackPanel Grid.Column="2" Orientation="Horizontal"><Button Content="＋ Archivos" Click="AddFiles_Click" Margin="0,0,6,0" Padding="9,6"/><Button Content="▣ Captura de ventana" Click="AddWindowCapture_Click" Margin="0,0,6,0" Padding="9,6"/><Button Content="Eliminar recurso" Click="Remove_Click" Padding="9,6"/></StackPanel></Grid>
-                <ListBox x:Name="LibraryList" Grid.Row="1" Background="#111720" BorderThickness="0" Foreground="{StaticResource TextMain}" FontSize="12" Padding="4" SelectionChanged="LibraryList_SelectionChanged" PreviewKeyDown="LibraryList_PreviewKeyDown" AllowDrop="True" PreviewMouseDoubleClick="LibraryList_DoubleClick" DragOver="LibraryList_DragOver" Drop="LibraryList_Drop">
+<Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="RECURSOS" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="ItemCount" Text="  0 recursos" Foreground="{StaticResource TextMuted}" Margin="6,0,8,0" VerticalAlignment="Center" FontSize="10"/>
+                    <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" CanContentScroll="False">
+                        <ListBox x:Name="BinTabs" SelectionChanged="BinTabs_SelectionChanged" DisplayMemberPath="Name" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                            <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="MinWidth" Value="100"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="#202A36"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="TabBorder" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="#263A3F"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </ScrollViewer>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="4,0,3,0">
+                        <Button Content="＋ Pestaña" Click="NewBin_Click" Padding="7,5" Margin="0,0,3,0" ToolTip="Crear pestaña"/>
+                        <Button Content="✎" Click="RenameBin_Click" Padding="7,5" Margin="0,0,3,0" ToolTip="Renombrar pestaña"/>
+                        <Button Content="🗑" Click="DeleteBin_Click" Padding="7,5" ToolTip="Eliminar pestaña"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="4,0,0,0">
+                        <TextBox x:Name="ResourceSearchBox" Width="120" Height="30" VerticalContentAlignment="Center" Padding="7,3" Margin="0,0,4,0" ToolTip="Buscar recursos por nombre" TextChanged="ResourceSearch_TextChanged"/>
+                        <ComboBox x:Name="ResourceKindFilter" Width="80" Height="30" SelectedValuePath="Tag" SelectionChanged="ResourceFilter_SelectionChanged" ToolTip="Filtrar recursos por tipo">
+                            <ComboBoxItem Content="TODOS" Tag="ALL" IsSelected="True"/><ComboBoxItem Content="IMAGEN" Tag="IMAGE"/><ComboBoxItem Content="VIDEO" Tag="VIDEO"/><ComboBoxItem Content="AUDIO" Tag="AUDIO"/><ComboBoxItem Content="CAPTURA" Tag="CAPTURE"/><ComboBoxItem Content="WEB" Tag="WEB"/>
+                        </ComboBox>
+                        <Button x:Name="RelinkResourceButton" Content="Revincular" Click="RelinkResource_Click" Padding="7,5" Margin="0,0,3,0" IsEnabled="False" ToolTip="Revincular el archivo faltante seleccionado"/>
+                        <Button Content="＋ Archivos" Click="AddFiles_Click" Padding="7,5" Margin="0,0,3,0"/>
+                        <Button Content="▣ Captura" Click="AddWindowCapture_Click" Padding="7,5" Margin="0,0,3,0" ToolTip="Agregar captura de ventana"/>
+                        <Button Content="Eliminar" Click="Remove_Click" Padding="7,5"/>
+                    </StackPanel>
+                </Grid>
+                <ListBox x:Name="LibraryList" Grid.Row="1" Background="#111720" BorderThickness="0" Foreground="{StaticResource TextMain}" FontSize="12" Padding="4" SelectionChanged="LibraryList_SelectionChanged" PreviewKeyDown="LibraryList_PreviewKeyDown" AllowDrop="True" PreviewMouseDoubleClick="LibraryList_DoubleClick" PreviewMouseLeftButtonDown="ResourceList_PreviewMouseLeftButtonDown" PreviewMouseMove="ResourceList_PreviewMouseMove" DragOver="LibraryList_DragOver" Drop="LibraryList_Drop">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid MinHeight="22">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock x:Name="ResourceGlyph" Grid.Column="0" Text="{Binding Glyph}" Foreground="{StaticResource TextMain}" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="ResourceLabel" Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="ResourceTypeSeparator" Grid.Column="2" Text="·" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="10,0,5,0"/>
+                                <TextBlock x:Name="ResourceType" Grid.Column="3" Text="{Binding TypeLabel}" Foreground="{StaticResource TextMuted}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <StackPanel x:Name="MissingBadge" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,0,0" Visibility="Collapsed">
+                                    <TextBlock Text="⚠ " Foreground="#F2B45C" FontWeight="Bold"/>
+                                    <TextBlock Text="ARCHIVO NO ENCONTRADO" Foreground="#F2B45C" FontSize="10" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsMissing}" Value="True"><Setter TargetName="MissingBadge" Property="Visibility" Value="Visible"/><Setter TargetName="ResourceLabel" Property="Foreground" Value="#F2B45C"/></DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
                     <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem"><Setter Property="Padding" Value="8,6"/><Setter Property="Margin" Value="2"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#202A36"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="#31575D"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBox.ItemContainerStyle>
                 </ListBox>
             </Grid>
