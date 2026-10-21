@@ -40,12 +40,13 @@ public partial class MainWindow
         BlackButton.FontWeight = black ? FontWeights.Bold : FontWeights.Normal;
         var display = snapshot?.DisplayDevice?.Replace(@"\\.\", "");
         OutputStatusText.Text = !open ? "SALIDA INACTIVA"
+            : snapshot?.IsDisplaySuspended == true ? "SALIDA SUSPENDIDA · esperando el monitor original"
             : $"SALIDA ACTIVA{(snapshot!.IsTestMode ? " · PRUEBA EN VENTANA" : "")} · " +
               (display is not null && snapshot.DisplayWidth > 0 && snapshot.DisplayHeight > 0
                   ? $"{display} · {snapshot.DisplayWidth}×{snapshot.DisplayHeight}"
                   : "pantalla pendiente de identificar") +
               (black ? " · BLACK ACTIVO" : snapshot.Item is null ? " · SIN PROGRAM (NEGRO)" : " · BLACK OFF");
-        OutputStatusText.Foreground = black ? Brushes.Salmon : open ? Brushes.LightGreen : Brushes.LightGray;
+        OutputStatusText.Foreground = open && snapshot?.IsDisplaySuspended == true ? Brushes.Goldenrod : black ? Brushes.Salmon : open ? Brushes.LightGreen : Brushes.LightGray;
         SelectedScreenText.Text = ScreenCombo.SelectedItem is ScreenChoice selected
             ? $"{(open ? "Próxima apertura (no mueve la salida actual)" : "Destino seleccionado")}: {selected.Label}"
             : "Sin pantalla seleccionada";

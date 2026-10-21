@@ -17,9 +17,13 @@ public sealed class OutputWindowHost
     private OutputProgramSnapshot _snapshot = new(null, false, false, false, false, TimeSpan.Zero, TimeSpan.Zero);
     private int _isOpen;
     private bool _testMode;
+    private bool _displaySuspended;
+    private OutputDisplayTarget? _currentDisplay;
 
     public event EventHandler? ProgramStateChanged;
     public event EventHandler? Closed;
+    public event EventHandler? EmergencyClosed;
+    public event EventHandler? DisplayAvailabilityChanged;
     public bool IsOpen => Volatile.Read(ref _isOpen) != 0;
     public OutputProgramSnapshot Snapshot { get { lock (_snapshotLock) return _snapshot; } }
     public MediaItem? CurrentProgramItem => CloneItem(Snapshot.Item);
@@ -28,18 +32,117 @@ public sealed class OutputWindowHost
 
     internal OutputWindowHost(Dispatcher operatorDispatcher, WindowCaptureRegistry captures) { _operatorDispatcher = operatorDispatcher; _captures = captures; }
 
-    public Task OpenAsync(bool testMode, double left, double top, double width, double height)
+    public Task OpenAsync(bool testMode, double left, double top, double width, double height, string? displayDevice = null, string? operatorDevice = null)
     {
         if (_thread is not null) throw new InvalidOperationException("La salida ya fue inicializada.");
         _testMode = testMode;
+        var operatorHandle = new System.Windows.Interop.WindowInteropHelper(System.Windows.Application.Current.MainWindow).Handle;
         var ready = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _thread = new Thread(() =>
         {
             try
             {
                 _outputDispatcher = Dispatcher.CurrentDispatcher;
+                _currentDisplay = OutputDisplayTarget.ReadAll().FirstOrDefault(x => x.Device == displayDevice);
+                var originalIdentity = _currentDisplay?.Identity;
+                bool TargetAvailable(IReadOnlyList<OutputDisplayTarget> displays)
+                {
+                    var currentOperatorDevice = OutputDisplayTarget.DeviceForWindow(operatorHandle);
+                    return currentOperatorDevice is not null && _currentDisplay is not null &&
+                        displays.Count >= 2 && !_currentDisplay.Primary &&
+                        _currentDisplay.Device != currentOperatorDevice && displays.Contains(_currentDisplay);
+                }
+                if (!testMode && (!TargetAvailable(OutputDisplayTarget.ReadAll()) ||
+                    _currentDisplay!.Left != (int)left || _currentDisplay.Top != (int)top ||
+                    _currentDisplay.Width != (int)width || _currentDisplay.Height != (int)height))
+                    throw new InvalidOperationException("La configuración de pantallas cambió. Actualizá las pantallas y seleccioná nuevamente la salida.");
                 var window = new OutputWindow();
                 _window = window;
+                var emergencyClosing = false;
+                void EmergencyClose()
+                {
+                    if (emergencyClosing) return;
+                    emergencyClosing = true;
+                    // Remove fullscreen immediately; normal Close owns media cleanup.
+                    window.Hide();
+                    _outputDispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
+                    {
+                        window.Close();
+                        _operatorDispatcher.BeginInvoke(new Action(() => EmergencyClosed?.Invoke(this, EventArgs.Empty)));
+                    }));
+                }
+                OutputDisplayTarget? recoveryCandidate = null;
+                var stableSamples = 0;
+                void NotifyDisplayAvailability()
+                {
+                    PublishSnapshot(window);
+                    _operatorDispatcher.BeginInvoke(new Action(() => DisplayAvailabilityChanged?.Invoke(this, EventArgs.Empty)));
+                }
+                void SuspendDisplay()
+                {
+                    if (emergencyClosing) return;
+                    recoveryCandidate = null;
+                    stableSamples = 0;
+                    window.Hide();
+                    if (_displaySuspended) return;
+                    _displaySuspended = true;
+                    NotifyDisplayAvailability();
+                }
+                void CheckDisplay()
+                {
+                    if (testMode || emergencyClosing) return;
+                    var displays = OutputDisplayTarget.ReadAll();
+                    if (!_displaySuspended)
+                    {
+                        if (!TargetAvailable(displays)) SuspendDisplay();
+                        return;
+                    }
+                    var candidate = OutputDisplayTarget.Recover(originalIdentity,
+                        OutputDisplayTarget.DeviceForWindow(operatorHandle), displays);
+                    if (candidate is null) { recoveryCandidate = null; stableSamples = 0; return; }
+                    stableSamples = candidate == recoveryCandidate ? stableSamples + 1 : 1;
+                    recoveryCandidate = candidate;
+                    if (stableSamples < 3) return;
+                    // Require a stable, unique external target; validate again immediately before showing.
+                    if (candidate != OutputDisplayTarget.Recover(originalIdentity,
+                        OutputDisplayTarget.DeviceForWindow(operatorHandle), OutputDisplayTarget.ReadAll()))
+                    { stableSamples = 0; return; }
+                    var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    if (!candidate.Place(handle) || stableSamples < 3) return;
+                    if (candidate != OutputDisplayTarget.Recover(originalIdentity,
+                        OutputDisplayTarget.DeviceForWindow(operatorHandle), OutputDisplayTarget.ReadAll()))
+                    { stableSamples = 0; return; }
+                    _currentDisplay = candidate;
+                    _displaySuspended = false;
+                    window.ShowActivated = false;
+                    window.Show();
+                    // A topology message during Show can suspend again. Never override that decision.
+                    if (_displaySuspended || !TargetAvailable(OutputDisplayTarget.ReadAll()) ||
+                        OutputDisplayTarget.DeviceForWindow(handle) != candidate.Device)
+                    { SuspendDisplay(); return; }
+                    NotifyDisplayAvailability();
+                }
+                System.Windows.Interop.HwndSource? source = null;
+                var emergencyHotkey = new GlobalHotkeyRegistration(0x5D03);
+                System.Windows.Interop.HwndSourceHook displayHook =
+                    (IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+                    {
+                        // Hide immediately on topology change; keep the decoder and dispatcher alive.
+                        if (message == 0x007E && !testMode) SuspendDisplay(); // WM_DISPLAYCHANGE
+                        return IntPtr.Zero;
+                    };
+                window.SourceInitialized += (_, _) =>
+                {
+                    source = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(window).Handle);
+                    source?.AddHook(displayHook);
+                    emergencyHotkey.TryRegister(window, System.Windows.Input.Key.Escape, EmergencyClose);
+                };
+                window.PreviewKeyDown += (_, e) =>
+                {
+                    if (e.Key != System.Windows.Input.Key.Escape) return;
+                    e.Handled = true;
+                    EmergencyClose();
+                };
                 if (testMode)
                 {
                     window.WindowStyle = WindowStyle.SingleBorderWindow;
@@ -64,6 +167,8 @@ public sealed class OutputWindowHost
                 window.ProgramStateChanged += (_, _) => PublishSnapshot(window);
                 window.Closed += (_, _) =>
                 {
+                    source?.RemoveHook(displayHook);
+                    emergencyHotkey.Dispose();
                     _statusTimer?.Stop();
                     Volatile.Write(ref _isOpen, 0);
                     PublishSnapshot(window);
@@ -71,9 +176,16 @@ public sealed class OutputWindowHost
                     _operatorDispatcher.BeginInvoke(new Action(() => Closed?.Invoke(this, EventArgs.Empty)));
                 };
                 window.Show();
+                if (!testMode && !TargetAvailable(OutputDisplayTarget.ReadAll())) SuspendDisplay();
+                if (emergencyClosing || _displaySuspended) window.Hide();
                 Volatile.Write(ref _isOpen, 1);
                 _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-                _statusTimer.Tick += (_, _) => PublishSnapshot(window);
+                _statusTimer.Tick += (_, _) =>
+                {
+                    // The same timer keeps publishing playback while the public window is hidden.
+                    CheckDisplay();
+                    PublishSnapshot(window);
+                };
                 _statusTimer.Start();
                 PublishSnapshot(window);
                 ready.TrySetResult(true);
@@ -135,7 +247,7 @@ public sealed class OutputWindowHost
         if (dispatcher is null || dispatcher.HasShutdownStarted) return;
         dispatcher.Invoke(() =>
         {
-            if (_window is { IsVisible: true } window) window.Close();
+            if (_window is { } window) window.Close();
             else dispatcher.BeginInvokeShutdown(DispatcherPriority.Background);
         });
     }
@@ -152,7 +264,7 @@ public sealed class OutputWindowHost
     {
         var dispatcher = _outputDispatcher;
         if (dispatcher is null || dispatcher.HasShutdownStarted || !IsOpen) return;
-        dispatcher.BeginInvoke(new Action(() => { if (_window is { IsVisible: true } window) action(window); }));
+        dispatcher.BeginInvoke(new Action(() => { if (IsOpen && _window is { } window) action(window); }));
     }
 
     private void PublishSnapshot(OutputWindow window)
@@ -161,10 +273,11 @@ public sealed class OutputWindowHost
         var duration = session?.Duration ?? TimeSpan.Zero;
         var position = session is null ? TimeSpan.Zero : session.IsEnded ? duration : session.Player.Position;
         var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-        var display = handle == IntPtr.Zero ? null : System.Windows.Forms.Screen.FromHandle(handle);
+        var display = _testMode && handle != IntPtr.Zero ? System.Windows.Forms.Screen.FromHandle(handle) : null;
         var snapshot = new OutputProgramSnapshot(CloneItem(window.CurrentProgramItem), window.IsProgramVideo,
             session?.IsPlaying == true, session?.IsEnded == true, session?.IsStopped == true, position, duration, window.CaptureStatus, window.IsBlackActive,
-            display?.DeviceName, display?.Bounds.Width ?? 0, display?.Bounds.Height ?? 0, _testMode);
+            _currentDisplay?.Device ?? display?.DeviceName, _currentDisplay?.Width ?? display?.Bounds.Width ?? 0,
+            _currentDisplay?.Height ?? display?.Bounds.Height ?? 0, _testMode, _displaySuspended);
         lock (_snapshotLock) _snapshot = snapshot;
         _operatorDispatcher.BeginInvoke(new Action(() => ProgramStateChanged?.Invoke(this, EventArgs.Empty)));
     }
@@ -183,4 +296,4 @@ public sealed class OutputWindowHost
 
 public sealed record OutputProgramSnapshot(MediaItem? Item, bool IsVideo, bool IsPlaying, bool IsEnded,
     bool IsStopped, TimeSpan Position, TimeSpan Duration, string? CaptureStatus = null, bool IsBlackActive = false,
-    string? DisplayDevice = null, int DisplayWidth = 0, int DisplayHeight = 0, bool IsTestMode = false);
+    string? DisplayDevice = null, int DisplayWidth = 0, int DisplayHeight = 0, bool IsTestMode = false, bool IsDisplaySuspended = false);

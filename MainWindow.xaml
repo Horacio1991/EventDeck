@@ -55,7 +55,11 @@
             <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock x:Name="OutputStatusText" Text="SALIDA INACTIVA" FontWeight="Bold" FontSize="12" HorizontalAlignment="Right" Margin="0,0,0,4"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <ComboBox x:Name="ScreenCombo" Width="210" Margin="0,0,8,0" DisplayMemberPath="Label" SelectionChanged="ScreenCombo_SelectionChanged"/>
+                <ComboBox x:Name="ScreenCombo" Width="210" Margin="0,0,8,0" SelectionChanged="ScreenCombo_SelectionChanged">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Label}"/></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
                 <Button Content="ACTUALIZAR PANTALLAS" Click="DetectScreens_Click" Margin="0,0,6,0" Padding="10,7"/>
                 <Button x:Name="OutputButton" Content="Abrir salida" Click="Output_Click" Background="{StaticResource AccentSecondary}" BorderBrush="{StaticResource Accent}" Padding="11,7"/>
                 <Button Content="Abrir evento" Click="OpenProject_Click" Margin="6,0,0,0" Padding="10,7"/>

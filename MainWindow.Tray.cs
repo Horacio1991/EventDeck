@@ -78,6 +78,8 @@ public partial class MainWindow
         finally { _changingTrayVisibility = false; }
     }
 
+    internal void RestoreExistingInstance() => RestoreFromTray();
+
     private void RestoreFromTray()
     {
         if (_isClosing || _changingTrayVisibility) return;

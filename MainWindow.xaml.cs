@@ -150,11 +150,46 @@ public partial class MainWindow : Window
     private async void Output_Click(object sender, RoutedEventArgs e)
     {
         if (_output?.IsOpen == true) { _output.Close(); OutputButton.Content = "Abrir salida"; RefreshOutputStatus(); SetStatus("Salida cerrada."); return; }
-        if (ScreenCombo.SelectedItem is not ScreenChoice choice) { SetStatus("Windows no informa monitores disponibles."); return; }
-        var testMode = WinForms.Screen.AllScreens.Length < 2;
+        var selectedDevice = (ScreenCombo.SelectedItem as ScreenChoice)?.DeviceName;
+        DetectScreens();
+        var operatorDevice = WinForms.Screen.FromHandle(new WindowInteropHelper(this).Handle).DeviceName;
+        var screens = WinForms.Screen.AllScreens;
+        if (screens.Length < 2)
+        {
+            SetStatus("No se detectó una segunda pantalla. Conectá el proyector o monitor y presioná Actualizar pantallas antes de abrir la salida.");
+            return;
+        }
+        var screen = screens.FirstOrDefault(x => x.DeviceName == selectedDevice);
+        if (screen is null || screen.DeviceName == operatorDevice)
+        {
+            SetStatus("La pantalla seleccionada ya no está disponible o es la del operador. Seleccioná el proyector o monitor de salida antes de abrir PROGRAM.");
+            return;
+        }
+        var choice = new ScreenChoice(screen, 0);
+        OutputButton.IsEnabled = false;
         var output = new OutputWindowHost(Dispatcher, _captures);
         _output = output;
         output.ProgramStateChanged += (_, _) => RefreshProgramControls();
+        output.EmergencyClosed += (_, _) =>
+        {
+            RestoreFromTray();
+            SetStatus("Salida cerrada por ESC.");
+        };
+        output.DisplayAvailabilityChanged += (_, _) =>
+        {
+            if (!ReferenceEquals(_output, output) || _isClosing) return;
+            if (output.Snapshot.IsDisplaySuspended)
+            {
+                RestoreFromTray();
+                SetStatus("Pantalla de salida no disponible. PROGRAM conserva la reproducción y espera el monitor original; ESC cierra la salida.");
+            }
+            else
+            {
+                DetectScreens();
+                SetStatus("Pantalla recuperada. PROGRAM continúa con la reproducción actual.");
+            }
+            RefreshOutputStatus();
+        };
         output.Closed += (_, _) =>
         {
             if (!ReferenceEquals(_output, output)) return;
@@ -167,9 +202,10 @@ public partial class MainWindow : Window
         var bounds = choice.Screen.Bounds;
         try
         {
-            await output.OpenAsync(testMode, bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+            await output.OpenAsync(false, bounds.Left, bounds.Top, bounds.Width, bounds.Height, choice.DeviceName, operatorDevice);
+            if (!ReferenceEquals(_output, output) || !output.IsOpen) return;
             OutputButton.Content = "Cerrar salida"; ProgramState.Text = "NEGRO";
-            SetStatus(testMode ? "Salida de prueba en ventana. Conectá un proyector para modo fullscreen." : $"Salida abierta en {choice.Label}. El público ve negro.");
+            SetStatus($"Salida abierta en {choice.Label}. El público ve negro.");
             UpdateProgramMonitorSurface();
             RefreshProgramControls();
         }
@@ -179,6 +215,7 @@ public partial class MainWindow : Window
             RefreshOutputStatus();
             SetStatus($"No se pudo abrir la salida: {ex.Message}");
         }
+        finally { OutputButton.IsEnabled = true; }
     }
 
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -364,6 +401,13 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _output?.IsOpen == true)
+        {
+            e.Handled = true;
+            _output.Close();
+            RestoreFromTray();
+            return;
+        }
         if (e.Key == Key.F6)
         {
             e.Handled = true;
