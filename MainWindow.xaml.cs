@@ -170,6 +170,11 @@ public partial class MainWindow : Window
         var output = new OutputWindowHost(Dispatcher, _captures);
         _output = output;
         output.ProgramStateChanged += (_, _) => RefreshProgramControls();
+        output.RecoveryFailed += (_, message) =>
+        {
+            if (ReferenceEquals(_output, output) && !_isClosing)
+                SetStatus("No se pudo recuperar el video tras reconectar la pantalla: " + message);
+        };
         output.EmergencyClosed += (_, _) =>
         {
             RestoreFromTray();
@@ -186,6 +191,7 @@ public partial class MainWindow : Window
             else
             {
                 DetectScreens();
+                UpdateProgramMonitorSurface();
                 SetStatus("Pantalla recuperada. PROGRAM continúa con la reproducción actual.");
             }
             RefreshOutputStatus();
@@ -481,8 +487,9 @@ public partial class MainWindow : Window
         }
         if (item.Kind == MediaKind.Video)
         {
-            var preparation = _previewPreparationTask;
-            if (!preparation.IsCompleted) await preparation;
+            // Do not queue ENTER presses behind preparation or an active TAKE.
+            if (_takeInProgress || !_previewPreparationTask.IsCompleted)
+            { SetStatus("Esperá a que el video termine de prepararse en PREVIEW."); return; }
             if (!ReferenceEquals(LibraryList.SelectedItem, item)) return;
         }
         await TakeAsync(TransitionKind.Merge);
@@ -579,7 +586,7 @@ public partial class MainWindow : Window
         var item = _selected;
         if ((item.Kind == MediaKind.Image || item.Kind == MediaKind.Video) && !File.Exists(item.Source)) { SetStatus("El archivo ya no existe en esa ruta."); return; }
         if (item.Kind == MediaKind.Web && !Uri.TryCreate(item.Source, UriKind.Absolute, out _)) { SetStatus("La URL no es válida."); return; }
-        if (item.Kind == MediaKind.Video && (_previewSession is not { IsReady: true } || !_previewSession.Source.Equals(new Uri(item.Source))))
+        if (item.Kind == MediaKind.Video && (!_previewPreparationTask.IsCompleted || _previewSession is not { IsReady: true } || !_previewSession.Source.Equals(new Uri(item.Source))))
         { SetStatus("Esperá a que el video termine de prepararse en PREVIEW."); return; }
 
         var snapshot = item.Kind == MediaKind.Web ? await CaptureWebSnapshotAsync() : null;
@@ -598,11 +605,6 @@ public partial class MainWindow : Window
             UpdateProgramMonitorSurface();
             ProgramState.Text = item.TypeLabel + "  ·  " + item.Name.ToUpperInvariant();
             UpdateProgramMuteButton(item); RefreshProgramControls();
-            if (item.Kind == MediaKind.Video && ReferenceEquals(_selected, item))
-            {
-                PreviewVideo.Source = null; PreviewVideo.Visibility = Visibility.Collapsed;
-                PreviewHint.Text = "El video está reproduciéndose en PROGRAM."; PreviewHint.Visibility = Visibility.Visible;
-            }
             SetStatus($"{item.Name} enviado a PROGRAM.");
         }
         catch (Exception ex)
@@ -610,6 +612,17 @@ public partial class MainWindow : Window
             SetStatus($"No se pudo enviar el recurso: {ex.Message}");
             if (prepared is not null) prepared.Dispose();
             if (ReferenceEquals(_selected, item)) { PreviewHint.Text = $"No se pudo enviar el recurso: {ex.Message}"; PreviewHint.Visibility = Visibility.Visible; }
+        }
+        finally
+        {
+            // PROGRAM owns a different decoder on its STA. Re-arm PREVIEW even after a failed TAKE.
+            // A selection change during the await already owns its own preparation.
+            if (prepared is not null && !_isClosing && ReferenceEquals(_selected, item) &&
+                ReferenceEquals(LibraryList.SelectedItem, item) && _previewSession is null)
+            {
+                _previewPreparationTask = PreparePreviewVideoAsync(item);
+                await _previewPreparationTask;
+            }
         }
     }
 

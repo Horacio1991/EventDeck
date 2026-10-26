@@ -173,6 +173,29 @@ public sealed class VideoSession : IDisposable
         return completion.Task;
     }
 
+    // Logical state only: it contains no WPF object or decoder ownership.
+    internal readonly record struct PlaybackState(TimeSpan Position, bool IsPlaying,
+        bool IsStopped, bool IsEnded, bool Loop, bool IsMuted, double Volume);
+
+    internal PlaybackState CapturePlaybackState() => new(Player.Position, IsPlaying,
+        IsStopped, IsEnded, Loop, Player.IsMuted, Player.Volume);
+
+    // Used only on a freshly opened recovery session. No priming method may follow this seek.
+    internal void RestorePlaybackState(PlaybackState state)
+    {
+        if (!IsReady || _disposed) throw new InvalidOperationException("La sesión de recuperación no está preparada.");
+        Player.Pause();
+        Player.Position = state.Position;
+        Loop = state.Loop;
+        Player.Volume = state.Volume;
+        Player.IsMuted = state.IsMuted;
+        IsPlaying = state.IsPlaying && !state.IsStopped && !state.IsEnded;
+        IsStopped = state.IsStopped;
+        IsEnded = state.IsEnded;
+        if (IsPlaying) Player.Play();
+        StateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Play()
     {
         if (!IsReady || _disposed) return;

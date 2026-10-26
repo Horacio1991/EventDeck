@@ -218,6 +218,36 @@ public partial class OutputWindow : Window
         ProgramStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    internal async Task PrepareRecoveredVideoAsync(MediaItem item,
+        VideoSession.PlaybackState state, bool black, CancellationToken cancellationToken)
+    {
+        if (_captureOutputClosed) throw new InvalidOperationException("La salida está cerrada.");
+        var session = new VideoSession(new Uri(item.Source), state.Loop);
+        // Own the opening decoder immediately so ESC/Closed can dispose it synchronously.
+        _programSession = session;
+        try
+        {
+            await session.OpenAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_captureOutputClosed) throw new OperationCanceledException(cancellationToken);
+            // Open initializes at zero; seek AFTER Open, before attachment or audible playback.
+            // Do not use the normal TAKE path: its priming resets Position to zero.
+            session.RestorePlaybackState(state with { IsPlaying = false, IsMuted = true, Volume = 0 });
+            session.StateChanged += ProgramSession_StateChanged;
+            CurrentProgramItem = item;
+            _incomingLayer = CreateLayer(session.Drawing);
+            RebuildScene();
+            if (black != IsBlackActive) await ToggleBlackAsync();
+        }
+        catch
+        {
+            session.StateChanged -= ProgramSession_StateChanged;
+            if (ReferenceEquals(_programSession, session)) _programSession = null;
+            session.Dispose();
+            throw;
+        }
+    }
+
     private DrawingGroup CreateLayer(Drawing drawing)
     {
         var group = new DrawingGroup { Opacity = 1, ClipGeometry = new RectangleGeometry(new Rect(0, 0, VideoSession.CanvasWidth, VideoSession.CanvasHeight)) };
