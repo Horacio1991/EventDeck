@@ -38,13 +38,33 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="MusicButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+            <Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></Style.Triggers>
+        </Style>
+        <Style x:Key="MusicPlayPause" TargetType="Button" BasedOn="{StaticResource MusicButton}">
+            <Setter Property="Content" Value="▶ PLAY"/>
+            <Style.Triggers><DataTrigger Binding="{Binding StateText}" Value="REPRODUCIENDO"><Setter Property="Content" Value="Ⅱ PAUSA"/></DataTrigger></Style.Triggers>
+        </Style>
+        <Style x:Key="WorkspaceTab" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Background" Value="{StaticResource Panel}"/>
+            <Setter Property="Padding" Value="24,10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+                <Border Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border>
+            </ControlTemplate></Setter.Value></Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True"><Setter Property="Background" Value="{StaticResource AccentSecondary}"/><Setter Property="Foreground" Value="White"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Foreground" Value="{StaticResource Accent}"/></Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="2*" MinHeight="220"/>
-            <RowDefinition Height="0.9*" MinHeight="130"/>
-            <RowDefinition Height="2.1*" MinHeight="150"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
@@ -69,7 +89,15 @@
             </StackPanel>
         </DockPanel>
 
-        <Grid Grid.Row="1" Margin="0,0,0,6">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,10">
+            <RadioButton x:Name="OperationTab" Content="OPERACIÓN" GroupName="Workspace" Tag="Operation" IsChecked="True" Style="{StaticResource WorkspaceTab}" Click="Workspace_Click"/>
+            <RadioButton x:Name="MusicTab" Content="MÚSICA" GroupName="Workspace" Tag="Music" Style="{StaticResource WorkspaceTab}" Click="Workspace_Click" Margin="6,0,0,0"/>
+        </StackPanel>
+        <Grid x:Name="WorkspaceHost" Grid.Row="2" SizeChanged="WorkspaceHost_SizeChanged">
+            <ScrollViewer x:Name="OperationViewport" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" ScrollChanged="OperationViewport_ScrollChanged">
+                <Grid x:Name="OperationView" MinHeight="520" Height="{Binding ActualHeight, ElementName=WorkspaceHost}">
+                    <Grid.RowDefinitions><RowDefinition Height="2*" MinHeight="220"/><RowDefinition Height="0.9*" MinHeight="130"/><RowDefinition Height="2.1*" MinHeight="150"/></Grid.RowDefinitions>
+        <Grid Grid.Row="0" Margin="0,0,0,6">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Border Grid.Column="0" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="0,0,5,0">
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -134,7 +162,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="0,0,0,6">
+        <Border Grid.Row="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="8" Margin="0,0,0,6">
             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="1.7*"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
                 <Grid Grid.Column="0" Margin="0,0,8,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <DockPanel Margin="2,0,2,6"><TextBlock Text="SONANDO" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/><StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center"><Border Background="#202735" CornerRadius="5" Padding="7,4" Margin="0,0,8,0"><TextBlock x:Name="PlayingCount" Text="0 pistas" Foreground="{StaticResource TextMuted}" FontSize="10" VerticalAlignment="Center"/></Border><Button x:Name="FadeOutAudioButton" Content="FADE OUT" Click="FadeOutAudioButton_Click" Padding="8,4" FontSize="9" Background="#3A3030" BorderBrush="#70504B" ToolTip="Fundir y detener todo el audio de EventDeck"/><TextBlock Text="TECLA" Foreground="{StaticResource TextMuted}" FontSize="9" VerticalAlignment="Center" Margin="8,0,4,0"/><ComboBox x:Name="FadeOutHotkeyCombo" Width="58" SelectedValuePath="Content" SelectionChanged="FadeOutHotkeyCombo_SelectionChanged" VerticalAlignment="Center"><ComboBoxItem Content="F8"/><ComboBoxItem Content="F10"/><ComboBoxItem Content="F11"/><ComboBoxItem Content="F12"/></ComboBox><Button Content="LIMPIAR LISTA" Click="ClearAudioList_Click" Padding="8,4" FontSize="9" Margin="8,0,0,0"/></StackPanel></DockPanel>
@@ -173,7 +201,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="3" Background="{StaticResource Panel}" CornerRadius="12" Padding="8">
+        <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="8">
             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
 <Grid Margin="0,0,0,6">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -226,5 +254,76 @@
             </Grid>
         </Border>
         <StackPanel x:Name="AudioPlayersHost" Width="1" Height="1" Visibility="Hidden" Opacity="0" IsHitTestVisible="False" Focusable="False"/>
+                </Grid>
+            </ScrollViewer>
+            <ScrollViewer x:Name="MusicViewport" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <Grid MinHeight="470" Height="{Binding ActualHeight, ElementName=WorkspaceHost}">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <DockPanel Margin="4,0,4,12"><TextBlock Text="MÚSICA" FontSize="22" FontWeight="Bold"/><TextBlock x:Name="MusicActiveCount" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/></DockPanel>
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border Background="{StaticResource Panel}" CornerRadius="12" Padding="18" Margin="0,0,6,0">
+                            <StackPanel>
+                                <TextBlock Text="PREPARADA" Foreground="{StaticResource Accent}" FontWeight="Bold" Margin="0,0,0,10"/>
+                                <TextBlock Text="{Binding Text, ElementName=PreparedAudioTitle}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Text, ElementName=PreparedAudioState}" Foreground="{StaticResource Accent}" Margin="0,4,0,8"/>
+                                <TextBlock Text="{Binding Text, ElementName=PreparedAudioDuration}" Foreground="{StaticResource TextMuted}" Margin="0,0,0,8"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="▶ LANZAR" Click="PlayPreparedAudio_Click" IsEnabled="{Binding IsEnabled, ElementName=PlayPreparedButton}" Style="{StaticResource MusicButton}" Background="{StaticResource AccentSecondary}" Padding="12,6"/>
+                                    <Button Content="QUITAR" Click="RemovePreparedAudio_Click" IsEnabled="{Binding IsEnabled, ElementName=RemovePreparedButton}" Style="{StaticResource MusicButton}" Margin="6,0" Padding="12,6"/>
+                                    <TextBlock Text="VOL." VerticalAlignment="Center" Margin="6,0"/>
+                                    <Slider Width="90" Minimum="0" Maximum="1" Value="{Binding Value, ElementName=PreparedAudioVolume, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Volumen de pista preparada"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button x:Name="MusicFadeOut" Content="FADE OUT" Click="FadeOutAudioButton_Click" Style="{StaticResource MusicButton}" IsEnabled="False" ToolTip="{Binding ToolTip, ElementName=FadeOutAudioButton}" Padding="12,6"/>
+                                    <Button x:Name="MusicPreviousPlaceholder" Content="|◀" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Anterior · próximo hito" Padding="10,6" Margin="6,0,0,0"/>
+                                    <Button x:Name="MusicNextPlaceholder" Content="▶|" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Siguiente · próximo hito" Padding="10,6" Margin="6,0,0,0"/>
+                                    <Button x:Name="MusicLoopPlaceholder" Content="LOOP" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Loop musical no disponible. F7 sigue controlando el video." Padding="10,6" Margin="6,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="18" Margin="6,0,0,0">
+                            <StackPanel><TextBlock Text="SONANDO · ÚLTIMA PISTA LANZADA" Foreground="{StaticResource Accent}" FontWeight="Bold" Margin="0,0,0,10"/>
+<StackPanel x:Name="MusicNowPanel" IsEnabled="False">
+    <TextBlock Text="{Binding Name, TargetNullValue=Sin pista activa}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+    <TextBlock Text="{Binding StateText, TargetNullValue=SIN PISTA}" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
+    <Grid Margin="0,8,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Slider Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding CurrentSeconds, Mode=OneWay}" Tag="{Binding}" ValueChanged="AudioTrackSeek_ValueChanged" IsMoveToPointEnabled="True" AutomationProperties.Name="Posición musical" Margin="0,0,12,0"/>
+        <TextBlock Grid.Column="1" Text="{Binding TimeLabel, TargetNullValue='00:00 / 00:00'}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
+    </Grid>
+    <StackPanel Orientation="Horizontal">
+        <Button Style="{StaticResource MusicPlayPause}" Click="AudioTrackToggle_Click" Padding="12,6"/>
+        <Button Style="{StaticResource MusicButton}" Content="■ STOP" Click="AudioTrackStop_Click" ToolTip="Detener y quitar la pista activa, como en OPERACIÓN" Margin="6,0" Padding="12,6"/>
+        <TextBlock Text="VOLUMEN" FontSize="10" VerticalAlignment="Center" Margin="8,0"/>
+        <Slider Width="110" Minimum="0" Maximum="1" Value="{Binding Volume, Mode=OneWay}" Tag="{Binding}" ValueChanged="AudioTrackVolume_ValueChanged" VerticalAlignment="Center" AutomationProperties.Name="Volumen musical"/>
+    </StackPanel>
+</StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="18">
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <WrapPanel Margin="0,0,0,14">
+                                <TextBlock Text="Buscar música" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="MusicSearchBox" Width="260" Margin="0,0,10,0" TextChanged="MusicSearch_TextChanged" ToolTip="Buscar música por título o nombre de archivo" AutomationProperties.Name="Buscar música"/>
+                                <Button x:Name="MusicAddButton" ToolTip="Biblioteca temporal durante esta ejecución; no se guarda con el evento" Content="+ AGREGAR MÚSICA" Click="MusicAdd_Click" Style="{StaticResource MusicButton}" Margin="0,0,12,0"/>
+                                <CheckBox x:Name="MusicAutoPlaceholder" Content="REPRODUCCIÓN AUTOMÁTICA" IsEnabled="False" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" ToolTipService.ShowOnDisabled="True" ToolTip="Disponible en un próximo hito"/>
+                            </WrapPanel>
+                            <Grid Grid.Row="1" Background="{StaticResource Panel2}"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions><TextBlock Text="TÍTULO" Margin="12,8" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="DURACIÓN" Margin="8" FontWeight="SemiBold"/></Grid>
+                            <Grid Grid.Row="2">
+                                <ListBox x:Name="MusicLibraryList" IsSynchronizedWithCurrentItem="False" Background="#111720" Foreground="{StaticResource TextMain}" BorderThickness="0" SelectionChanged="MusicLibrary_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
+                                    <ListBox.ItemTemplate><DataTemplate>
+                                        <Grid Margin="8,5"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}" Margin="0,0,12,0"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding DurationLabel}" ToolTip="{Binding DurationStatus}" Foreground="{StaticResource TextMuted}"/>
+                                        </Grid>
+                                    </DataTemplate></ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock x:Name="MusicLibraryHint" Text="Agregá archivos de audio para preparar tu música. Biblioteca temporal: no se guarda con el evento." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20" IsHitTestVisible="False"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>
