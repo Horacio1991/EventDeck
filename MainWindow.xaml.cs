@@ -23,21 +23,14 @@ public partial class MainWindow : Window
     private Task _previewPreparationTask = Task.CompletedTask;
     private int _previewGeneration;
     private bool _suppressBinSelection;
-    private readonly ObservableCollection<AudioTrack> _playingTracks = new();
-    private DispatcherTimer? _audioOpenTimer;
-    private AudioTrack? _audioOpenTimerTrack;
+    private readonly MusicSession _music = new();
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private OutputWindowHost? _output;
     private MediaItem? _selected;
-    private AudioTrack? _preparedAudio;
     private bool _previewMuted = true;
-    private bool _audioPreviewActive;
-    private bool _preparedAudioPlayRequested;
     private bool _libraryNavigationActive;
     private bool _restoringProgramMirror;
     private readonly GlobalHotkeyRegistration _fadeOutHotkey = new();
-    private readonly Dictionary<AudioTrack, Task> _audioFadeOutTasks = new();
-    private readonly HashSet<AudioTrack> _manualAudioFadeOutRequested = new();
     private Key _fadeOutAudioKey = Key.F8;
     private bool _hotkeySettingsReady;
     private string _projectName = "Evento sin guardar";
@@ -58,7 +51,10 @@ public partial class MainWindow : Window
         LibraryList.ItemsSource = _items;
         _activeBin = new LibraryBin { Name = "GENERAL" }; _bins.Add(_activeBin); _items = _activeBin.Items;
         AttachResourceView(); BinTabs.ItemsSource = _bins; BinTabs.SelectedItem = _activeBin;
-        AudioPlayingList.ItemsSource = _playingTracks;
+        AudioPlayingList.ItemsSource = _music.PlayingTracks;
+        _music.PreparedChanged += (_, _) => RefreshPreparedMusic();
+        _music.StateChanged += (_, _) => UpdatePlayingCount();
+        _music.StatusChanged += (_, message) => SetStatus(message);
         DetectScreens();
         ProgramSeek.IsEnabled = false;
         _clock.Tick += (_, _) => RefreshPlaybackClocks();
@@ -76,9 +72,7 @@ public partial class MainWindow : Window
         {
             DisposeTray();
             _clock.Stop(); _fadeOutHotkey.Dispose(); _output?.Close(); CancelPreviewLoad(); _captures.Dispose(); PreviewWeb.Dispose();
-            StopAudioOpenTimeout();
-            _preparedAudio?.Player.Close();
-            foreach (var track in _playingTracks.ToList()) track.Player.Close();
+            _music.Dispose();
         };
     }
 
@@ -481,8 +475,8 @@ public partial class MainWindow : Window
         _selected = item;
         if (item.Kind == MediaKind.Audio)
         {
-            if (_preparedAudio is null || !_preparedAudio.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase)) PrepareAudio(item);
-            if (_preparedAudio is not null) PlayPreparedAudio();
+            if (_music.PreparedTrack is null || !_music.PreparedTrack.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase)) PrepareAudio(item);
+            if (_music.PreparedTrack is not null) PlayPreparedAudio();
             return;
         }
         if (item.Kind == MediaKind.Video)
@@ -556,15 +550,7 @@ public partial class MainWindow : Window
         if (_previewSession.IsEnded) PreviewCurrent.Text = FormatTime(_previewSession.Duration);
     }
 
-    private void StopAudioPreview()
-    {
-        if (_preparedAudio is null || !_audioPreviewActive) return;
-        _preparedAudio.Player.Pause();
-        _preparedAudio.Player.Position = TimeSpan.Zero;
-        _preparedAudio.PreviewMuted = _previewMuted;
-        _audioPreviewActive = false;
-        if (PreparedAudioState is not null) PreparedAudioState.Text = "LISTA PARA PLAY";
-    }
+    private void StopAudioPreview() => _music.StopActivePreview(_previewMuted);
 
     private async Task<string?> CaptureWebSnapshotAsync()
     {
@@ -634,26 +620,23 @@ public partial class MainWindow : Window
     private void PreviewPlay_Click(object sender, RoutedEventArgs e)
     {
         if (_previewSession is not null) { _previewSession.Play(); PreviewCurrent.Text = FormatTime(_previewSession.Player.Position); }
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
         {
-            if (!audio.Player.NaturalDuration.HasTimeSpan) return;
-            if (audio.Player.Position >= audio.Player.NaturalDuration.TimeSpan) audio.Player.Position = TimeSpan.Zero;
-            audio.PreviewMuted = _previewMuted; audio.Player.Play(); _audioPreviewActive = true;
-            PreparedAudioState.Text = "VISTA PREVIA";
+            _music.PlayPreview(_previewMuted);
         }
         else if (_selected?.Kind == MediaKind.Web) SetStatus("La página web está activa: podés interactuar directamente en PREVIEW.");
     }
     private void PreviewPause_Click(object sender, RoutedEventArgs e)
     {
         if (_previewSession is not null) _previewSession.Pause();
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
-        { audio.Player.Pause(); _audioPreviewActive = false; PreparedAudioState.Text = "VISTA PAUSADA"; }
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
+        { _music.PausePreview(); }
     }
     private void PreviewStop_Click(object sender, RoutedEventArgs e)
     {
         if (_previewSession is not null) _previewSession.Stop();
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
-        { audio.Player.Pause(); if (audio.Player.NaturalDuration.HasTimeSpan) audio.Player.Position = TimeSpan.Zero; _audioPreviewActive = false; PreparedAudioState.Text = "LISTA PARA PLAY"; }
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase))
+        { _music.StopPreview(); }
         else return;
         PreviewSeek.Value = 0; PreviewCurrent.Text = "00:00";
     }
@@ -739,7 +722,7 @@ public partial class MainWindow : Window
     {
         _previewMuted = !_previewMuted;
         if (_previewSession is not null) _previewSession.Player.IsMuted = _previewMuted;
-        if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) audio.PreviewMuted = _previewMuted;
+        if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) _music.SetPreviewMuted(_previewMuted);
         UpdatePreviewMuteButton();
     }
     private void UpdatePreviewMuteButton()
@@ -751,12 +734,12 @@ public partial class MainWindow : Window
     {
         if (Mouse.LeftButton != MouseButtonState.Pressed || !PreviewSeek.IsMouseOver) return;
         if (_previewSession is not null) _previewSession.Seek(TimeSpan.FromSeconds(PreviewSeek.Value));
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) audio.Player.Position = TimeSpan.FromSeconds(PreviewSeek.Value);
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) _music.SeekPrepared(TimeSpan.FromSeconds(PreviewSeek.Value));
     }
     private void PreviewSeek_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (_previewSession is not null) _previewSession.Seek(TimeSpan.FromSeconds(PreviewSeek.Value));
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) audio.Player.Position = TimeSpan.FromSeconds(PreviewSeek.Value);
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase)) _music.SeekPrepared(TimeSpan.FromSeconds(PreviewSeek.Value));
     }
     private async void LibraryList_DoubleClick(object sender, MouseButtonEventArgs e)
     {
@@ -764,273 +747,93 @@ public partial class MainWindow : Window
         await TakeAsync(TransitionKind.Fade);
     }
 
-    private void PrepareAudio(MediaItem item)
+    private void PrepareAudio(MediaItem item) =>
+        _music.Prepare(item.Name, item.Source, PreparedAudioVolume.Value, _previewMuted);
+
+    private void RefreshPreparedMusic()
     {
-        StopAudioOpenTimeout();
-        if (_preparedAudio is not null) ReleaseAudioTrack(_preparedAudio);
-        _preparedAudio = null; _audioPreviewActive = false; _preparedAudioPlayRequested = false;
-
-        if (!File.Exists(item.Source))
+        var track = _music.PreparedTrack;
+        var error = _music.PreparationError;
+        PreparedAudioTitle.Text = track?.Name ?? error?.Name ?? "Elegí una canción en la biblioteca";
+        PreparedAudioState.Text = _music.PreparationState switch
         {
-            PreparedAudioTitle.Text = item.Name; PreparedAudioState.Text = "ERROR";
-            PreparedAudioDuration.Text = "No se encuentra el archivo";
-            PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
-            SetStatus($"EventDeck pudo preparar la referencia a ‘{Path.GetFileName(item.Source)}’, pero el archivo no existe y no puede reproducirse.");
-            return;
-        }
-
-        AudioTrack track;
-        try { track = CreateAudioTrack(item.Name, item.Source, PreparedAudioVolume.Value); }
-        catch (Exception ex)
-        {
-            ShowPreparedAudioError(item.Name, item.Source, ex);
-            return;
-        }
-
-        _preparedAudio = track;
-        track.PreviewMuted = _previewMuted;
-        PreparedAudioTitle.Text = item.Name; PreparedAudioState.Text = "CARGANDO";
-        PreparedAudioDuration.Text = "Duración: cargando…";
-        // PLAY stays available while Open is asynchronous; pressing it queues a single play request.
-        PlayPreparedButton.IsEnabled = true; RemovePreparedButton.IsEnabled = true;
-        SetStatus($"{item.Name} preparada. La música que está sonando continúa.");
-        StartAudioOpenTimeout(track);
-        try { track.Player.Open(new Uri(item.Source)); }
-        catch (Exception ex) { HandleAudioMediaFailed(track, ex); }
-    }
-
-    private AudioTrack CreateAudioTrack(string name, string source, double volume)
-    {
-        var player = new System.Windows.Media.MediaPlayer { Volume = volume };
-        var track = new AudioTrack(name, source, player) { Volume = volume, StateText = "PREPARANDO" };
-        player.MediaOpened += (_, _) => Dispatcher.BeginInvoke(new Action(() => HandleAudioMediaOpened(track)));
-        player.MediaEnded += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (!_playingTracks.Contains(track) && !ReferenceEquals(_preparedAudio, track)) return;
-            track.CurrentSeconds = track.DurationSeconds; track.StateText = "FINALIZADA";
-            if (ReferenceEquals(_preparedAudio, track)) { _audioPreviewActive = false; PreparedAudioState.Text = "LISTA PARA PLAY"; }
-        }));
-        player.MediaFailed += (_, args) =>
-        {
-            var error = args.ErrorException ?? new InvalidOperationException("Windows no informó el detalle del error multimedia.");
-            Dispatcher.BeginInvoke(new Action(() => HandleAudioMediaFailed(track, error)));
+            MusicPreparationState.Loading => "CARGANDO",
+            MusicPreparationState.Ready => "LISTA PARA PLAY",
+            MusicPreparationState.PreviewPlaying => "VISTA PREVIA",
+            MusicPreparationState.PreviewPaused => "VISTA PAUSADA",
+            MusicPreparationState.Error => "ERROR",
+            _ => "SIN PISTA"
         };
-        return track;
-    }
-
-    private void HandleAudioMediaOpened(AudioTrack track)
-    {
-        if (!ReferenceEquals(_preparedAudio, track)) return;
-        if (!track.Player.HasAudio)
-        {
-            HandleAudioMediaFailed(track, new System.IO.InvalidDataException("Windows abrió el archivo, pero no encontró una pista de audio reproducible."));
-            return;
-        }
-        track.IsPrepared = true;
-        track.StateText = "LISTA";
-        StopAudioOpenTimeout(track);
-        if (track.Player.NaturalDuration.HasTimeSpan)
-        {
-            track.DurationSeconds = track.Player.NaturalDuration.TimeSpan.TotalSeconds;
-            PreparedAudioDuration.Text = $"Duración: {FormatTime(track.Player.NaturalDuration.TimeSpan)}";
-        }
-        else PreparedAudioDuration.Text = "Duración: no disponible";
-
-        PreparedAudioState.Text = "LISTA PARA PLAY";
-        PlayPreparedButton.IsEnabled = true;
-        if (_preparedAudioPlayRequested)
-        {
-            _preparedAudioPlayRequested = false;
-            PlayPreparedAudio();
-        }
-    }
-
-    private void StartAudioOpenTimeout(AudioTrack track)
-    {
-        StopAudioOpenTimeout();
-        _audioOpenTimerTrack = track;
-        _audioOpenTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
-        _audioOpenTimer.Tick += (_, _) =>
-        {
-            StopAudioOpenTimeout(track);
-            if (ReferenceEquals(_preparedAudio, track) && !track.IsPrepared)
-                HandleAudioMediaFailed(track, new TimeoutException("Windows no informó MediaOpened después de 20 segundos."));
-        };
-        _audioOpenTimer.Start();
-    }
-
-    private void StopAudioOpenTimeout(AudioTrack? track = null)
-    {
-        if (track is not null && !ReferenceEquals(_audioOpenTimerTrack, track)) return;
-        if (_audioOpenTimer is not null) _audioOpenTimer.Stop();
-        _audioOpenTimer = null; _audioOpenTimerTrack = null;
+        PreparedAudioDuration.Text = error is not null
+            ? error.MissingFile ? "No se encuentra el archivo" : "No se pudo abrir el archivo"
+            : track is null ? "Duración: --:--"
+            : !track.IsPrepared ? "Duración: cargando…"
+            : _music.PreparedHasDuration ? $"Duración: {FormatTime(TimeSpan.FromSeconds(track.DurationSeconds))}"
+            : "Duración: no disponible";
+        // PLAY during asynchronous Open still queues one request in the engine.
+        PlayPreparedButton.IsEnabled = RemovePreparedButton.IsEnabled = track is not null;
     }
 
     private void PlayPreparedAudio_Click(object sender, RoutedEventArgs e) => PlayPreparedAudio();
-
-    private void PlayPreparedAudio()
-    {
-        if (_preparedAudio is null) { SetStatus("Elegí una canción en la biblioteca para prepararla."); return; }
-        var track = _preparedAudio;
-        if (!File.Exists(track.Source))
-        {
-            HandleAudioMediaFailed(track, new FileNotFoundException("No se encuentra el archivo de audio.", track.Source));
-            return;
-        }
-        if (!track.IsPrepared)
-        {
-            _preparedAudioPlayRequested = true;
-            SetStatus($"Reproducción de {track.Name} solicitada; comenzará cuando Windows termine de abrir el medio.");
-            return;
-        }
-
-        var oldTracks = _playingTracks.Where(t => t.StateText == "REPRODUCIENDO").ToList();
-        try
-        {
-            track.Player.Pause();
-            if (track.Player.NaturalDuration.HasTimeSpan) track.Player.Position = TimeSpan.Zero;
-            track.PlaybackGain = oldTracks.Count > 0 ? 0 : 1;
-            track.PreviewMuted = false;
-            track.Player.Play();
-        }
-        catch (Exception ex)
-        {
-            HandleAudioMediaFailed(track, ex);
-            return;
-        }
-
-        // Promote only after Play() was accepted. A later MediaFailed removes the track again.
-        track.StateText = "REPRODUCIENDO";
-        _preparedAudio = null; _preparedAudioPlayRequested = false; _audioPreviewActive = false;
-        _playingTracks.Add(track);
-        foreach (var old in oldTracks) _ = FadeOutAndRemoveAsync(old);
-        if (oldTracks.Count > 0) _ = FadeInAsync(track);
-        PreparedAudioTitle.Text = "Elegí una canción en la biblioteca"; PreparedAudioState.Text = "SIN PISTA";
-        PreparedAudioDuration.Text = "Duración: --:--"; PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
-        UpdatePlayingCount(); SetStatus(oldTracks.Count == 0 ? $"Reproduciendo {track.Name}." : $"Reproduciendo {track.Name}; fundiendo las pistas anteriores.");
-    }
-
-    private void HandleAudioMediaFailed(AudioTrack track, Exception error)
-    {
-        var wasPrepared = ReferenceEquals(_preparedAudio, track);
-        var wasPlaying = _playingTracks.Contains(track);
-        if (!wasPrepared && !wasPlaying) { track.IsPrepared = false; return; }
-        StopAudioOpenTimeout(track);
-        track.IsPrepared = false; track.StateText = "ERROR";
-        if (wasPlaying) RemovePlayingTrack(track);
-        if (wasPrepared)
-        {
-            _preparedAudio = null; _audioPreviewActive = false; _preparedAudioPlayRequested = false;
-            ReleaseAudioTrack(track);
-            ShowPreparedAudioError(track.Name, track.Source, error);
-        }
-        else SetStatus($"EventDeck pudo preparar la referencia a ‘{Path.GetFileName(track.Source)}’, pero no pudo reproducir el medio. Error informado por Windows: {error.Message}");
-    }
-
-    private void ShowPreparedAudioError(string name, string source, Exception error)
-    {
-        PreparedAudioTitle.Text = name; PreparedAudioState.Text = "ERROR";
-        PreparedAudioDuration.Text = "No se pudo abrir el archivo";
-        PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
-        SetStatus($"EventDeck pudo preparar la referencia a ‘{Path.GetFileName(source)}’, pero no pudo reproducir el medio. Error informado por Windows: {error.Message}");
-    }
+    private void PlayPreparedAudio() => _music.PlayPrepared();
 
     private void AudioTrackToggle_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is not AudioTrack track) return;
-        if (track.StateText == "REPRODUCIENDO") { track.Player.Pause(); track.StateText = "EN PAUSA"; }
-        else
-        {
-            if (track.StateText == "FINALIZADA" || track.StateText == "DETENIDA") track.Player.Position = TimeSpan.Zero;
-            track.PlaybackGain = 1; track.Player.Play(); track.StateText = "REPRODUCIENDO";
-        }
+        if ((sender as FrameworkElement)?.DataContext is AudioTrack track) _music.ToggleTrack(track);
     }
-
     private void AudioTrackStop_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is AudioTrack track) RemovePlayingTrack(track);
+        if ((sender as FrameworkElement)?.DataContext is AudioTrack track) _music.RemoveTrack(track);
     }
-
     private async void RemoveAudioTrack_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not AudioTrack track) return;
         if (track.StateText == "REPRODUCIENDO")
         {
             if (System.Windows.MessageBox.Show(this, $"‘{track.Name}’ está sonando. ¿Querés fundirla y quitarla de la lista? El archivo original se conserva.", "Quitar pista", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-            await FadeTrackToAndRemoveAsync(track, 350);
+            await _music.RemoveWithFadeAsync(track);
         }
-        else RemovePlayingTrack(track);
+        else _music.RemoveTrack(track);
     }
-
     private void RemovePreparedAudio_Click(object sender, RoutedEventArgs e)
     {
-        if (_preparedAudio is null) return;
-        ReleaseAudioTrack(_preparedAudio); _preparedAudio = null; _audioPreviewActive = false; _preparedAudioPlayRequested = false;
-        PreparedAudioTitle.Text = "Elegí una canción en la biblioteca"; PreparedAudioState.Text = "SIN PISTA";
-        PreparedAudioDuration.Text = "Duración: --:--"; PlayPreparedButton.IsEnabled = false; RemovePreparedButton.IsEnabled = false;
+        if (_music.PreparedTrack is null) return;
+        _music.RemovePrepared();
         SetStatus("Pista preparada quitada. El archivo original se conserva.");
     }
-
     private async void ClearAudioList_Click(object sender, RoutedEventArgs e)
     {
-        var playing = _playingTracks.Where(t => t.StateText == "REPRODUCIENDO").ToList();
-        if ((playing.Count > 0 || _preparedAudio is not null) && System.Windows.MessageBox.Show(this,
+        if ((_music.PlayingCount > 0 || _music.PreparedTrack is not null) && System.Windows.MessageBox.Show(this,
             "¿Quitar todas las pistas de la lista, incluida la preparada? Las pistas que suenan se fundirán y los archivos originales se conservarán.",
             "Limpiar lista de música", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        foreach (var track in playing) track.StateText = "QUITANDO";
-        if (playing.Count > 0) await Task.WhenAll(playing.Select(t => FadeTrackToAndRemoveAsync(t, 450)));
-        foreach (var track in _playingTracks.ToList()) RemovePlayingTrack(track);
-        if (_preparedAudio is not null) RemovePreparedAudio_Click(this, new RoutedEventArgs());
-        UpdatePlayingCount();
+        await _music.ClearAsync();
     }
-
     private void AudioTrackSeek_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (sender is not Slider slider || slider.Tag is not AudioTrack track) return;
-        if (Mouse.LeftButton == MouseButtonState.Pressed && slider.IsMouseOver) track.Player.Position = TimeSpan.FromSeconds(Math.Max(0, slider.Value));
+        if (Mouse.LeftButton == MouseButtonState.Pressed && slider.IsMouseOver) _music.SeekTrack(track, slider.Value);
     }
-
     private void AudioTrackVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (sender is Slider slider && slider.Tag is AudioTrack track && Math.Abs(track.Volume - slider.Value) > 0.001) track.Volume = slider.Value;
+        if (sender is Slider slider && slider.Tag is AudioTrack track && Math.Abs(track.Volume - slider.Value) > 0.001) _music.SetVolume(track, slider.Value);
     }
-
     private void PreparedAudioVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_preparedAudio is not null) _preparedAudio.Volume = PreparedAudioVolume.Value;
-    }
-
-    private void RemovePlayingTrack(AudioTrack track)
-    {
-        track.IsPrepared = false;
-        track.Player.Close();
-        _playingTracks.Remove(track);
-        UpdatePlayingCount();
-    }
-
-    private void ReleaseAudioTrack(AudioTrack track)
-    {
-        track.IsPrepared = false;
-        track.Player.Close();
+        if (_music.PreparedTrack is not null) _music.SetPreparedVolume(PreparedAudioVolume.Value);
     }
 
     private void RefreshPlaybackClocks()
     {
         RefreshCaptureControls();
-        foreach (var track in _playingTracks)
-        {
-            if (!track.Player.NaturalDuration.HasTimeSpan) continue;
-            track.CurrentSeconds = Math.Min(track.Player.Position.TotalSeconds, track.DurationSeconds);
-        }
         RefreshProgramControls();
         if (_previewSession is { IsReady: true } session)
         {
             if (!(Mouse.LeftButton == MouseButtonState.Pressed && PreviewSeek.IsMouseOver)) PreviewSeek.Value = Math.Min(session.Player.Position.TotalSeconds, PreviewSeek.Maximum);
             PreviewCurrent.Text = FormatTime(session.IsEnded ? session.Duration : session.Player.Position);
         }
-        else if (_selected?.Kind == MediaKind.Audio && _preparedAudio is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase) && audio.Player.NaturalDuration.HasTimeSpan)
+        else if (_selected?.Kind == MediaKind.Audio && _music.PreparedTrack is { } audio && audio.Source.Equals(_selected.Source, StringComparison.OrdinalIgnoreCase) && _music.PreparedHasDuration)
         {
-            var position = audio.Player.Position;
+            var position = _music.PreparedPosition;
             if (!(Mouse.LeftButton == MouseButtonState.Pressed && PreviewSeek.IsMouseOver)) PreviewSeek.Value = Math.Min(position.TotalSeconds, PreviewSeek.Maximum);
             PreviewCurrent.Text = FormatTime(position);
         }
@@ -1039,7 +842,7 @@ public partial class MainWindow : Window
     private void Remove_Click(object sender, RoutedEventArgs e)
     {
         if (LibraryList.SelectedItem is not MediaItem item) return;
-        var playingAudio = item.Kind == MediaKind.Audio ? _playingTracks.Where(t => t.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase)).ToList() : new List<AudioTrack>();
+        var playingAudio = item.Kind == MediaKind.Audio ? _music.PlayingTracks.Where(t => t.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase)).ToList() : new List<AudioTrack>();
         if (playingAudio.Count > 0 && System.Windows.MessageBox.Show(this, "Esta pista está sonando. ¿Querés quitarla de la biblioteca y detener su reproducción? El archivo original se conserva.", "Quitar pista", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         if (ReferenceEquals(_selected, item))
         {
@@ -1047,13 +850,11 @@ public partial class MainWindow : Window
             PreviewAudioCard.Visibility = Visibility.Collapsed;
             PreviewHint.Visibility = Visibility.Visible; PreviewHint.Text = "Seleccioná un recurso visual"; _selected = null;
         }
-        if (_preparedAudio is not null && _preparedAudio.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase))
+        if (_music.PreparedTrack is not null && _music.PreparedTrack.Source.Equals(item.Source, StringComparison.OrdinalIgnoreCase))
         {
-            ReleaseAudioTrack(_preparedAudio); _preparedAudio = null; _audioPreviewActive = false; _preparedAudioPlayRequested = false;
-            PreparedAudioTitle.Text = "Elegí una canción en la biblioteca"; PreparedAudioState.Text = "SIN PISTA";
-            PreparedAudioDuration.Text = "Duración: --:--"; PlayPreparedButton.IsEnabled = false;
+            _music.RemovePrepared();
         }
-        foreach (var track in playingAudio) RemovePlayingTrack(track);
+        foreach (var track in playingAudio) _music.RemoveTrack(track);
         _items.Remove(item); UpdateCount();
     }
 
@@ -1123,73 +924,8 @@ public partial class MainWindow : Window
         _output.SeekProgram(TimeSpan.FromSeconds(ProgramSeek.Value));
     }
 
-    private async Task FadeTrackToAndRemoveAsync(AudioTrack track, int durationMs)
-    {
-        await FadeOutTrackAsync(track, durationMs);
-    }
-
     private void FadeOutAudioButton_Click(object sender, RoutedEventArgs e) => _ = FadeOutCurrentAudioAsync();
-
-    private async Task FadeOutCurrentAudioAsync()
-    {
-        var tracks = _playingTracks.Where(track => track.StateText == "REPRODUCIENDO").ToList();
-        if (tracks.Count == 0) return;
-        foreach (var track in tracks) _manualAudioFadeOutRequested.Add(track);
-        SetStatus($"Fade-out de {tracks.Count} pista(s) de audio.");
-        await Task.WhenAll(tracks.Select(track => FadeOutTrackAsync(track, 1000)));
-    }
-
-    private Task FadeOutAndRemoveAsync(AudioTrack track) => FadeOutTrackAsync(track, 1200);
-
-    private Task FadeOutTrackAsync(AudioTrack track, int durationMs)
-    {
-        if (!_playingTracks.Contains(track)) return Task.CompletedTask;
-        if (_audioFadeOutTasks.TryGetValue(track, out var activeFade)) return activeFade;
-        var task = FadeOutTrackCoreAsync(track, durationMs);
-        _audioFadeOutTasks[track] = task;
-        return task;
-    }
-
-    private async Task FadeOutTrackCoreAsync(AudioTrack track, int durationMs)
-    {
-        try
-        {
-            var start = track.PlaybackGain;
-            var timer = System.Diagnostics.Stopwatch.StartNew();
-            while (timer.ElapsedMilliseconds < durationMs && _playingTracks.Contains(track))
-            {
-                await Task.Delay(25);
-                var progress = Math.Clamp(timer.Elapsed.TotalMilliseconds / durationMs, 0, 1);
-                track.PlaybackGain = start * (1 - progress);
-            }
-            if (_playingTracks.Contains(track))
-            {
-                track.PlaybackGain = 0;
-                RemovePlayingTrack(track);
-            }
-        }
-        catch (Exception ex)
-        {
-            if (_playingTracks.Contains(track)) RemovePlayingTrack(track);
-            SetStatus($"No se pudo completar el fade-out de {track.Name}: {ex.Message}");
-        }
-        finally
-        {
-            _audioFadeOutTasks.Remove(track);
-            _manualAudioFadeOutRequested.Remove(track);
-        }
-    }
-
-    private async Task FadeInAsync(AudioTrack track)
-    {
-        const int durationMs = 650; var elapsed = 0;
-        while (elapsed < durationMs && _playingTracks.Contains(track) && track.StateText == "REPRODUCIENDO" && !_manualAudioFadeOutRequested.Contains(track))
-        {
-            await Task.Delay(40); elapsed += 40;
-            if (!_manualAudioFadeOutRequested.Contains(track)) track.PlaybackGain = Math.Min(1, elapsed / (double)durationMs);
-        }
-        if (_playingTracks.Contains(track) && track.StateText == "REPRODUCIENDO" && !_manualAudioFadeOutRequested.Contains(track)) track.PlaybackGain = 1;
-    }
+    private Task FadeOutCurrentAudioAsync() => _music.FadeOutCurrentAsync();
 
     private void LibraryList_Drop(object sender, System.Windows.DragEventArgs e)
     {
@@ -1219,7 +955,7 @@ public partial class MainWindow : Window
         _captures.SetResourceBindings(_bins.SelectMany(bin => bin.Items).Select(item => item.CaptureBinding));
         RefreshResourceView();
     }
-    private void UpdatePlayingCount() => PlayingCount.Text = $"{_playingTracks.Count(track => track.StateText == "REPRODUCIENDO")} sonando";
+    private void UpdatePlayingCount() => PlayingCount.Text = $"{_music.PlayingCount} sonando";
     private void SetStatus(string message) => Title = "EventDeck  ·  " + message;
     private static string FormatTime(TimeSpan value) => $"{(int)value.TotalMinutes:00}:{value.Seconds:00}";
 
@@ -1248,9 +984,7 @@ public partial class MainWindow : Window
             var project = JsonSerializer.Deserialize<EventProject>(json);
             if (project is null) { SetStatus("El archivo de evento está vacío o no es válido."); return; }
             CancelPreviewLoad();
-            if (_preparedAudio is not null) ReleaseAudioTrack(_preparedAudio);
-            _preparedAudio = null; _audioPreviewActive = false; _preparedAudioPlayRequested = false;
-            foreach (var track in _playingTracks.ToList()) RemovePlayingTrack(track);
+            _music.Reset();
             _bins.Clear();
             var loadedBins = project.Bins?.Where(b => !string.IsNullOrWhiteSpace(b.Name)).ToList() ?? new List<LibraryBin>();
             if (loadedBins.Count == 0) loadedBins.Add(new LibraryBin { Name = "GENERAL", Items = new ObservableCollection<MediaItem>(project.Items ?? new List<MediaItem>()) });
