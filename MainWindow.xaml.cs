@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         _music.PreparedChanged += (_, _) => RefreshPreparedMusic();
         _music.StateChanged += (_, _) => UpdatePlayingCount();
         _music.StatusChanged += (_, message) => SetStatus(message);
+        InitializeMusicWorkspace();
         DetectScreens();
         ProgramSeek.IsEnabled = false;
         _clock.Tick += (_, _) => RefreshPlaybackClocks();
@@ -243,6 +244,11 @@ public partial class MainWindow : Window
     {
         if (ProgramImage is null || _restoringProgramMirror || !IsVisible || _isClosing) return;
         var output = _output;
+        if (!IsProgramMonitorInsideWorkspace())
+        {
+            output?.HideProgramMirror();
+            return;
+        }
         if (output is not { IsOpen: true } || WindowState == WindowState.Minimized)
         {
             output?.HideProgramMirror();
@@ -430,6 +436,11 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             _ = FadeOutCurrentAudioAsync();
+            return;
+        }
+        if (_musicWorkspaceVisible)
+        {
+            HandleMusicEnter(e);
             return;
         }
         if (!_libraryNavigationActive) return;
@@ -775,7 +786,7 @@ public partial class MainWindow : Window
     }
 
     private void PlayPreparedAudio_Click(object sender, RoutedEventArgs e) => PlayPreparedAudio();
-    private void PlayPreparedAudio() => _music.PlayPrepared();
+    private void PlayPreparedAudio() => _musicNavigation!.LaunchPrepared();
 
     private void AudioTrackToggle_Click(object sender, RoutedEventArgs e)
     {
@@ -783,7 +794,7 @@ public partial class MainWindow : Window
     }
     private void AudioTrackStop_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is AudioTrack track) _music.RemoveTrack(track);
+        if ((sender as FrameworkElement)?.DataContext is AudioTrack track) _music.StopTrack(track);
     }
     private async void RemoveAudioTrack_Click(object sender, RoutedEventArgs e)
     {

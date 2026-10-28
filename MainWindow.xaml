@@ -59,6 +59,19 @@
                 <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Foreground" Value="{StaticResource Accent}"/></Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="MusicToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="Background" Value="{StaticResource Panel2}"/>
+            <Setter Property="BorderBrush" Value="#354052"/><Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="7" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            </ControlTemplate></Setter.Value></Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True"><Setter Property="Background" Value="{StaticResource AccentSecondary}"/><Setter Property="Foreground" Value="{StaticResource Accent}"/><Setter Property="BorderBrush" Value="{StaticResource Accent}"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="White"/></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -274,12 +287,7 @@
                                     <TextBlock Text="VOL." VerticalAlignment="Center" Margin="6,0"/>
                                     <Slider Width="90" Minimum="0" Maximum="1" Value="{Binding Value, ElementName=PreparedAudioVolume, Mode=TwoWay}" VerticalAlignment="Center" AutomationProperties.Name="Volumen de pista preparada"/>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                    <Button x:Name="MusicFadeOut" Content="FADE OUT" Click="FadeOutAudioButton_Click" Style="{StaticResource MusicButton}" IsEnabled="False" ToolTip="{Binding ToolTip, ElementName=FadeOutAudioButton}" Padding="12,6"/>
-                                    <Button x:Name="MusicPreviousPlaceholder" Content="|◀" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Anterior · próximo hito" Padding="10,6" Margin="6,0,0,0"/>
-                                    <Button x:Name="MusicNextPlaceholder" Content="▶|" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Siguiente · próximo hito" Padding="10,6" Margin="6,0,0,0"/>
-                                    <Button x:Name="MusicLoopPlaceholder" Content="LOOP" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Loop musical no disponible. F7 sigue controlando el video." Padding="10,6" Margin="6,0,0,0"/>
-                                </StackPanel>
+
                             </StackPanel>
                         </Border>
                         <Border Grid.Column="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="18" Margin="6,0,0,0">
@@ -288,7 +296,7 @@
     <TextBlock Text="{Binding Name, TargetNullValue=Sin pista activa}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
     <TextBlock Text="{Binding StateText, TargetNullValue=SIN PISTA}" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
     <Grid Margin="0,8,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <Slider Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding CurrentSeconds, Mode=OneWay}" Tag="{Binding}" ValueChanged="AudioTrackSeek_ValueChanged" IsMoveToPointEnabled="True" AutomationProperties.Name="Posición musical" Margin="0,0,12,0"/>
+        <Slider x:Name="MusicSeek" SmallChange="1" LargeChange="10" PreviewMouseLeftButtonUp="MusicSeek_MouseUp" KeyUp="MusicSeek_KeyUp" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding CurrentSeconds, Mode=OneWay}" Tag="{Binding}" ValueChanged="AudioTrackSeek_ValueChanged" IsMoveToPointEnabled="True" AutomationProperties.Name="Posición musical" Margin="0,0,12,0"/>
         <TextBlock Grid.Column="1" Text="{Binding TimeLabel, TargetNullValue='00:00 / 00:00'}" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}"/>
     </Grid>
     <StackPanel Orientation="Horizontal">
@@ -298,6 +306,12 @@
         <Slider Width="110" Minimum="0" Maximum="1" Value="{Binding Volume, Mode=OneWay}" Tag="{Binding}" ValueChanged="AudioTrackVolume_ValueChanged" VerticalAlignment="Center" AutomationProperties.Name="Volumen musical"/>
     </StackPanel>
 </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button x:Name="MusicPrevious" Content="|◀" Click="MusicPrevious_Click" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Lanzar anterior del listado visible, sin volver al final" Padding="10,6"/>
+                                    <Button x:Name="MusicNext" Content="▶|" Click="MusicNext_Click" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Lanzar siguiente del listado visible, con crossfade" Padding="10,6" Margin="6,0,0,0"/>
+                                    <ToggleButton x:Name="MusicLoop" Content="↻ LOOP" Click="MusicLoop_Click" IsEnabled="False" Style="{StaticResource MusicToggle}" ToolTip="Repetir esta canción; tiene prioridad sobre automático. F7 controla el video." Margin="6,0,0,0"/>
+                                    <Button x:Name="MusicFadeOut" Content="FADE OUT" Click="FadeOutAudioButton_Click" Style="{StaticResource MusicButton}" IsEnabled="False" ToolTip="{Binding ToolTip, ElementName=FadeOutAudioButton}" Padding="12,6" Margin="6,0,0,0"/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -306,7 +320,7 @@
                             <WrapPanel Margin="0,0,0,14">
                                 <TextBlock Text="Buscar música" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="MusicSearchBox" Width="260" Margin="0,0,10,0" TextChanged="MusicSearch_TextChanged" ToolTip="Buscar música por título o nombre de archivo" AutomationProperties.Name="Buscar música"/>
                                 <Button x:Name="MusicAddButton" ToolTip="Biblioteca temporal durante esta ejecución; no se guarda con el evento" Content="+ AGREGAR MÚSICA" Click="MusicAdd_Click" Style="{StaticResource MusicButton}" Margin="0,0,12,0"/>
-                                <CheckBox x:Name="MusicAutoPlaceholder" Content="REPRODUCCIÓN AUTOMÁTICA" IsEnabled="False" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" ToolTipService.ShowOnDisabled="True" ToolTip="Disponible en un próximo hito"/>
+                                <ToggleButton x:Name="MusicAuto" Content="▶| AUTO" Click="MusicAuto_Click" Style="{StaticResource MusicToggle}" VerticalAlignment="Center" ToolTip="Al finalizar naturalmente, lanzar la siguiente del listado visible. Stop y Fade Out no avanzan."/>
                             </WrapPanel>
                             <Grid Grid.Row="1" Background="{StaticResource Panel2}"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions><TextBlock Text="TÍTULO" Margin="12,8" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="DURACIÓN" Margin="8" FontWeight="SemiBold"/></Grid>
                             <Grid Grid.Row="2">

@@ -23,6 +23,7 @@ public sealed class MusicSession : IDisposable
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private DispatcherTimer? _openTimer;
     private AudioTrack? _openTimerTrack;
+    private readonly HashSet<AudioTrack> _loopTracks = new();
     private bool _previewActive;
     private bool _playRequested;
     private bool _disposed;
@@ -35,6 +36,8 @@ public sealed class MusicSession : IDisposable
     public bool PreparedHasDuration => PreparedTrack?.Player.NaturalDuration.HasTimeSpan == true;
     public TimeSpan PreparedPosition => PreparedTrack?.Player.Position ?? TimeSpan.Zero;
     public int PlayingCount => _playingTracks.Count(t => t.StateText == "REPRODUCIENDO");
+    public bool IsPlayPending => _playRequested;
+    public event EventHandler<AudioTrack>? NaturallyEnded;
     public event EventHandler? PreparedChanged;
     public event EventHandler? StateChanged;
     public event EventHandler<string>? StatusChanged;
@@ -91,14 +94,7 @@ public sealed class MusicSession : IDisposable
         var player = new MediaPlayer { Volume = volume };
         var track = new AudioTrack(name, source, player) { Volume = volume, StateText = "PREPARANDO" };
         EventHandler opened = (_, _) => _dispatcher.BeginInvoke(new Action(() => MediaOpened(track)));
-        EventHandler ended = (_, _) => _dispatcher.BeginInvoke(new Action(() =>
-        {
-            if (!Owns(track)) return;
-            track.CurrentSeconds = track.DurationSeconds; track.StateText = "FINALIZADA";
-            if (ReferenceEquals(PreparedTrack, track))
-            { _previewActive = false; SetPreparedState(MusicPreparationState.Ready); }
-            Changed();
-        }));
+        EventHandler ended = (_, _) => _dispatcher.BeginInvoke(new Action(() => MediaEnded(track)));
         EventHandler<ExceptionEventArgs> failed = (_, args) =>
         {
             var error = args.ErrorException ?? new InvalidOperationException("Windows no informó el detalle del error multimedia.");
@@ -114,6 +110,51 @@ public sealed class MusicSession : IDisposable
             player.MediaFailed -= failed;
         });
         return track;
+    }
+
+    private void MediaEnded(AudioTrack track)
+    {
+        if (!Owns(track)) return;
+        var natural = _playingTracks.Contains(track) && track.StateText == "REPRODUCIENDO"
+            && !_fadeOutTasks.ContainsKey(track) && !_manualFadeOutRequested.Contains(track);
+        if (natural && _loopTracks.Contains(track))
+        {
+            try
+            {
+                track.Player.Position = TimeSpan.Zero;
+                track.CurrentSeconds = 0;
+                track.Player.Play();
+            }
+            catch (Exception ex) { MediaFailed(track, ex); }
+            return;
+        }
+        track.CurrentSeconds = track.DurationSeconds; track.StateText = "FINALIZADA";
+        if (ReferenceEquals(PreparedTrack, track))
+        { _previewActive = false; SetPreparedState(MusicPreparationState.Ready); }
+        Changed();
+        // Explicit natural completion only: removal, Stop and fading never publish it.
+        if (natural) NaturallyEnded?.Invoke(this, track);
+    }
+
+    public bool IsLooping(AudioTrack track) => _loopTracks.Contains(track);
+    public void SetLoop(AudioTrack track, bool enabled)
+    {
+        VerifyAccess();
+        if (!_playingTracks.Contains(track)) return;
+        if (enabled) _loopTracks.Add(track); else _loopTracks.Remove(track);
+        Changed();
+    }
+    public void CancelPendingPlay()
+    {
+        VerifyAccess();
+        _playRequested = false;
+        Changed();
+    }
+    public void StopTrack(AudioTrack track)
+    {
+        VerifyAccess();
+        _playRequested = false;
+        RemoveTrack(track);
     }
 
     private void MediaOpened(AudioTrack track)
@@ -161,6 +202,7 @@ public sealed class MusicSession : IDisposable
         if (!track.IsPrepared)
         {
             _playRequested = true;
+            Changed();
             Status($"Reproducción de {track.Name} solicitada; comenzará cuando Windows termine de abrir el medio.");
             return;
         }
@@ -271,7 +313,10 @@ public sealed class MusicSession : IDisposable
     public void SeekTrack(AudioTrack track, double seconds)
     {
         VerifyAccess();
-        if (_playingTracks.Contains(track)) track.Player.Position = TimeSpan.FromSeconds(Math.Max(0, seconds));
+        if (!_playingTracks.Contains(track) || !double.IsFinite(seconds)) return;
+        var position = Math.Clamp(seconds, 0, Math.Max(0, track.DurationSeconds));
+        track.Player.Position = TimeSpan.FromSeconds(position);
+        track.CurrentSeconds = position;
     }
     public void SetVolume(AudioTrack track, double volume)
     {
@@ -301,6 +346,7 @@ public sealed class MusicSession : IDisposable
     public async Task ClearAsync()
     {
         VerifyAccess();
+        _playRequested = false;
         var generation = _generation;
         var playing = _playingTracks.Where(t => t.StateText == "REPRODUCIENDO").ToList();
         foreach (var track in playing) track.StateText = "QUITANDO";
@@ -318,6 +364,7 @@ public sealed class MusicSession : IDisposable
     public async Task FadeOutCurrentAsync()
     {
         VerifyAccess();
+        CancelPendingPlay(); // F8 also cancels a next track still opening.
         var tracks = _playingTracks.Where(t => t.StateText == "REPRODUCIENDO").ToList();
         if (tracks.Count == 0) return;
         foreach (var track in tracks) _manualFadeOutRequested.Add(track);
@@ -383,6 +430,7 @@ public sealed class MusicSession : IDisposable
         StopOpenTimeout(track);
         if (!_detachHandlers.Remove(track, out var detach)) return;
         detach();
+        _loopTracks.Remove(track);
         track.IsPrepared = false;
         track.Player.Close();
     }
