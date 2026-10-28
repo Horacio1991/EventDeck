@@ -5,6 +5,7 @@ public sealed class MusicNavigation : IDisposable
 {
     private readonly MusicSession _session;
     private readonly Func<IReadOnlyList<MusicLibraryEntry>> _visibleEntries;
+    private readonly Dictionary<AudioTrack, MusicCollection?> _contexts = new();
     private string? _autoPendingSource;
     private bool _autoPlay;
     public event EventHandler<MusicLibraryEntry>? Navigated;
@@ -14,6 +15,8 @@ public sealed class MusicNavigation : IDisposable
         _session = session;
         _visibleEntries = visibleEntries;
         _session.NaturallyEnded += OnNaturallyEnded;
+        _session.StateChanged += PruneContexts;
+        _session.PreparedChanged += PruneContexts;
     }
 
     public bool AutoPlay
@@ -29,10 +32,11 @@ public sealed class MusicNavigation : IDisposable
         }
     }
 
-    public void Prepare(MusicLibraryEntry entry, double volume, bool previewMuted)
+    public void Prepare(MusicLibraryEntry entry, double volume, bool previewMuted, MusicCollection? collection = null)
     {
         _autoPendingSource = null;
         _session.Prepare(entry.Title, entry.Source, volume, previewMuted);
+        if (_session.PreparedTrack is { } track) _contexts[track] = collection;
     }
 
     public void LaunchPrepared()
@@ -41,12 +45,22 @@ public sealed class MusicNavigation : IDisposable
         _session.PlayPrepared();
     }
 
-    public MusicLibraryEntry? Neighbor(int direction)
+    private AudioTrack? ReferenceTrack => _session.IsPlayPending ? _session.PreparedTrack
+        : _session.PlayingTracks.LastOrDefault() ?? _session.PreparedTrack;
+
+    public string? ContextName => ReferenceTrack is { } track && _contexts.TryGetValue(track, out var collection)
+        && collection is not null ? collection.IsDeleted ? "Colección eliminada · avance deshabilitado" : collection.Name : null;
+
+    // Collection context is bound to the track, never to the visible tab/search.
+    private IReadOnlyList<MusicLibraryEntry> Sequence(AudioTrack track)
     {
-        var source = _session.IsPlayPending ? _session.PreparedTrack?.Source
-            : _session.PlayingTracks.LastOrDefault()?.Source ?? _session.PreparedTrack?.Source;
-        return FindNeighbor(_visibleEntries(), source, direction);
+        if (_contexts.TryGetValue(track, out var collection) && collection is not null)
+            return collection.IsDeleted ? Array.Empty<MusicLibraryEntry>() : collection.Library.Entries;
+        return _visibleEntries();
     }
+
+    public MusicLibraryEntry? Neighbor(int direction) => ReferenceTrack is { } track
+        ? FindNeighbor(Sequence(track), track.Source, direction) : null;
 
     public static MusicLibraryEntry? FindNeighbor(IReadOnlyList<MusicLibraryEntry> entries, string? source, int direction)
     {
@@ -62,19 +76,20 @@ public sealed class MusicNavigation : IDisposable
 
     public void Move(int direction, double volume)
     {
-        if (Neighbor(direction) is { } entry) PrepareAndLaunch(entry, volume, false);
+        if (ReferenceTrack is { } track && Neighbor(direction) is { } entry)
+            PrepareAndLaunch(entry, volume, false, _contexts.GetValueOrDefault(track));
     }
 
     private void OnNaturallyEnded(object? sender, AudioTrack track)
     {
         if (!AutoPlay || _session.IsPlayPending || !ReferenceEquals(_session.PlayingTracks.LastOrDefault(), track)) return;
-        if (FindNeighbor(_visibleEntries(), track.Source, 1) is { } entry)
-            PrepareAndLaunch(entry, track.Volume, true);
+        if (FindNeighbor(Sequence(track), track.Source, 1) is { } entry)
+            PrepareAndLaunch(entry, track.Volume, true, _contexts.GetValueOrDefault(track));
     }
 
-    private void PrepareAndLaunch(MusicLibraryEntry entry, double volume, bool automatic)
+    private void PrepareAndLaunch(MusicLibraryEntry entry, double volume, bool automatic, MusicCollection? collection)
     {
-        Prepare(entry, volume, true);
+        Prepare(entry, volume, true, collection);
         Navigated?.Invoke(this, entry);
         // Failed/missing media stays an error: don't skip arbitrarily through the list.
         if (_session.PreparedTrack is null) return;
@@ -82,5 +97,24 @@ public sealed class MusicNavigation : IDisposable
         _autoPendingSource = automatic ? entry.Source : null;
     }
 
-    public void Dispose() => _session.NaturallyEnded -= OnNaturallyEnded;
+    private void PruneContexts(object? sender, EventArgs e)
+    {
+        foreach (var track in _contexts.Keys.ToList())
+            if (!ReferenceEquals(_session.PreparedTrack, track) && !_session.PlayingTracks.Contains(track)) _contexts.Remove(track);
+    }
+
+    public void Reset()
+    {
+        AutoPlay = false;
+        _autoPendingSource = null;
+        _contexts.Clear();
+    }
+
+    public void Dispose()
+    {
+        _session.NaturallyEnded -= OnNaturallyEnded;
+        _session.StateChanged -= PruneContexts;
+        _session.PreparedChanged -= PruneContexts;
+        _contexts.Clear();
+    }
 }

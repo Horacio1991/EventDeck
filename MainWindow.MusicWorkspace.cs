@@ -14,7 +14,9 @@ namespace EventDeck;
 public partial class MainWindow
 {
     private MusicNavigation? _musicNavigation;
-    private readonly MusicLibrary _musicLibrary = new();
+    private readonly MusicCollections _musicCollections = new();
+    private MusicLibrary _musicLibrary => _musicCollections.Active.Library;
+    private bool _changingMusicCollection;
     private ICollectionView? _musicLibraryView;
     private bool _refreshingMusicFilter;
     private bool _musicWorkspaceReady;
@@ -23,18 +25,18 @@ public partial class MainWindow
 
     private void InitializeMusicWorkspace()
     {
-        _musicLibraryView = CollectionViewSource.GetDefaultView(_musicLibrary.Entries);
-        _musicLibraryView.Filter = item => item is MusicLibraryEntry entry && entry.Matches(MusicSearchBox.Text);
-        MusicLibraryList.ItemsSource = _musicLibraryView;
-        _musicNavigation = new MusicNavigation(_music, () => _musicLibraryView.Cast<MusicLibraryEntry>().ToList());
+        _musicNavigation = new MusicNavigation(_music, () => Array.Empty<MusicLibraryEntry>());
         _musicNavigation.Navigated += (_, entry) =>
         {
+            if (!_musicLibrary.Entries.Contains(entry)) return;
             _refreshingMusicFilter = true;
             try { MusicLibraryList.SelectedItem = entry; MusicLibraryList.ScrollIntoView(entry); }
             finally { _refreshingMusicFilter = false; }
         };
-        Closing += (_, _) => { _musicNavigation.Dispose(); _musicLibrary.Dispose(); };
+        Closing += (_, _) => { _musicNavigation.Dispose(); _musicCollections.Dispose(); };
+        MusicCollectionTabs.ItemsSource = _musicCollections.Items;
         _musicWorkspaceReady = true;
+        AttachMusicCollection();
         _music.PreparedChanged += (_, _) => RefreshMusicWorkspace();
         _music.StateChanged += (_, _) => RefreshMusicWorkspace();
         RefreshMusicWorkspace();
@@ -73,6 +75,7 @@ public partial class MainWindow
         MusicLoop.IsChecked = track is not null && _music.IsLooping(track);
         MusicSeek.IsEnabled = track is { DurationSeconds: > 0 };
         MusicActiveCount.Text = $"{_music.PlayingCount} sonando";
+        MusicSequenceContext.Text = _musicNavigation?.ContextName is { } context ? $"SECUENCIA · {context}" : "";
     }
 
 
@@ -84,24 +87,26 @@ public partial class MainWindow
             Filter = "Audio local|*.mp3;*.wav;*.wma;*.m4a;*.aac"
         };
         if (dialog.ShowDialog(this) != true) return;
-        _musicLibrary.Add(dialog.FileNames);
+        var library = _musicLibrary;
+        library.Add(dialog.FileNames);
         RefreshMusicLibraryView();
-        await _musicLibrary.ReadPendingDurationsAsync();
+        await library.ReadPendingDurationsAsync();
     }
 
     private void MusicSearch_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_musicWorkspaceReady) RefreshMusicLibraryView();
+        if (_musicWorkspaceReady && !_changingMusicCollection) RefreshMusicLibraryView();
     }
 
     private void RefreshMusicLibraryView()
     {
         // Filtering may remove the selected row; that must not prepare another song.
+        foreach (var entry in _musicLibrary.Entries) entry.RefreshAvailability();
         _refreshingMusicFilter = true;
         try { _musicLibraryView?.Refresh(); }
         finally { _refreshingMusicFilter = false; }
         MusicLibraryHint.Text = _musicLibrary.Entries.Count == 0
-            ? "Agregá archivos de audio. Esta biblioteca es temporal y no se guarda con el evento."
+            ? "Agregá archivos de audio a esta colección. Se guardará junto con el evento."
             : "No hay coincidencias para esta búsqueda.";
         MusicLibraryHint.Visibility = _musicLibraryView?.IsEmpty != false ? Visibility.Visible : Visibility.Collapsed;
         RefreshMusicWorkspace();
@@ -109,10 +114,102 @@ public partial class MainWindow
 
     private void MusicLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_musicWorkspaceReady || _refreshingMusicFilter || MusicLibraryList.SelectedItem is not MusicLibraryEntry entry) return;
+        if (!_musicWorkspaceReady || _changingMusicCollection || _refreshingMusicFilter || MusicLibraryList.SelectedItem is not MusicLibraryEntry entry) return;
         // Preparation only. The operator explicitly launches using the existing PLAY.
         // Never select an Operation resource or touch its PREVIEW/PROGRAM state.
-        _musicNavigation!.Prepare(entry, PreparedAudioVolume.Value, _previewMuted);
+        entry.RefreshAvailability();
+        _musicNavigation!.Prepare(entry, PreparedAudioVolume.Value, _previewMuted, _musicCollections.Active);
+        RefreshMusicWorkspace();
+    }
+
+    private void AttachMusicCollection()
+    {
+        _changingMusicCollection = true;
+        try
+        {
+            MusicSearchBox.Text = "";
+            MusicLibraryList.SelectedItem = null;
+            _musicLibraryView = CollectionViewSource.GetDefaultView(_musicLibrary.Entries);
+            _musicLibraryView.Filter = item => item is MusicLibraryEntry entry && entry.Matches(MusicSearchBox.Text);
+            MusicLibraryList.ItemsSource = _musicLibraryView;
+            MusicCollectionTabs.SelectedItem = _musicCollections.Active;
+        }
+        finally { _changingMusicCollection = false; }
+        RefreshMusicLibraryView();
+        _ = _musicLibrary.ReadPendingDurationsAsync();
+    }
+
+    private void MusicCollection_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_musicWorkspaceReady || _changingMusicCollection || MusicCollectionTabs.SelectedItem is not MusicCollection collection) return;
+        _musicCollections.Select(collection);
+        AttachMusicCollection();
+    }
+
+    private void MusicCollection_Add(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BinNameDialog("Nueva colección musical") { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        _changingMusicCollection = true;
+        try { _musicCollections.Create(dialog.BinName); }
+        finally { _changingMusicCollection = false; }
+        AttachMusicCollection();
+    }
+
+    private void MusicCollection_Rename(object sender, RoutedEventArgs e)
+    {
+        var collection = _musicCollections.Active;
+        var dialog = new BinNameDialog("Renombrar colección musical", collection.Name) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        collection.Name = dialog.BinName;
+        RefreshMusicWorkspace();
+    }
+
+    private void MusicCollection_Delete(object sender, RoutedEventArgs e)
+    {
+        var collection = _musicCollections.Active;
+        if (collection.Library.Entries.Count > 0 && System.Windows.MessageBox.Show(this,
+            $"¿Eliminar la colección ‘{collection.Name}’ y sus referencias musicales?\nLos archivos originales y la canción SONANDO se conservan.",
+            "Eliminar colección musical", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        _changingMusicCollection = true;
+        try { _musicCollections.Remove(collection); }
+        finally { _changingMusicCollection = false; }
+        AttachMusicCollection();
+    }
+
+    private void RestoreMusicProject(MusicProjectData? data)
+    {
+        // OpenProject already resets MusicSession. Restore organization only, never playback.
+        _musicNavigation!.Reset();
+        MusicAuto.IsChecked = false;
+        MusicLoop.IsChecked = false;
+        _changingMusicCollection = true;
+        try { _musicCollections.Restore(data); }
+        finally { _changingMusicCollection = false; }
+        AttachMusicCollection();
+    }
+
+    private void HandleMusicKeyDown(KeyEventArgs e)
+    {
+        if (!_musicWorkspaceVisible || e.Handled) return;
+        if (e.Key is Key.Left or Key.Right)
+        {
+            if (Keyboard.Modifiers != ModifierKeys.None) return;
+            var focus = Keyboard.FocusedElement;
+            // Opt in only controls without native horizontal navigation.
+            // Text editors, sliders (including their thumbs), collection tabs,
+            // toggles and any unknown controls keep their own arrow behavior.
+            bool navigationFocus = ReferenceEquals(focus, this)
+                || ReferenceEquals(focus, MusicLibraryList)
+                || focus is System.Windows.Controls.Button
+                || focus is ListBoxItem item
+                    && ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(item), MusicLibraryList);
+            if (!navigationFocus) return;
+            e.Handled = true;
+            if (!e.IsRepeat) MoveMusic(e.Key == Key.Left ? -1 : 1);
+            return;
+        }
+        HandleMusicEnter(e);
     }
 
     private void HandleMusicEnter(KeyEventArgs e)

@@ -440,7 +440,7 @@ public partial class MainWindow : Window
         }
         if (_musicWorkspaceVisible)
         {
-            HandleMusicEnter(e);
+            HandleMusicKeyDown(e);
             return;
         }
         if (!_libraryNavigationActive) return;
@@ -979,7 +979,7 @@ public partial class MainWindow : Window
         var name = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(_projectPath));
         try
         {
-            await File.WriteAllTextAsync(_projectPath, JsonSerializer.Serialize(new EventProject { Name = name, ActiveBinName = _activeBin?.Name ?? "GENERAL", Bins = _bins.ToList(), Items = _bins.SelectMany(b => b.Items).ToList() }, new JsonSerializerOptions { WriteIndented = true }));
+            await File.WriteAllTextAsync(_projectPath, JsonSerializer.Serialize(new EventProject { Music = _musicCollections.Capture(), Name = name, ActiveBinName = _activeBin?.Name ?? "GENERAL", Bins = _bins.ToList(), Items = _bins.SelectMany(b => b.Items).ToList() }, new JsonSerializerOptions { WriteIndented = true }));
             _projectName = name; ProjectNameText.Text = name; SetStatus("Evento guardado.");
         }
         catch (Exception ex) { SetStatus($"No se pudo guardar: {ex.Message}"); }
@@ -996,6 +996,7 @@ public partial class MainWindow : Window
             if (project is null) { SetStatus("El archivo de evento está vacío o no es válido."); return; }
             CancelPreviewLoad();
             _music.Reset();
+            RestoreMusicProject(project.Music);
             _bins.Clear();
             var loadedBins = project.Bins?.Where(b => !string.IsNullOrWhiteSpace(b.Name)).ToList() ?? new List<LibraryBin>();
             if (loadedBins.Count == 0) loadedBins.Add(new LibraryBin { Name = "GENERAL", Items = new ObservableCollection<MediaItem>(project.Items ?? new List<MediaItem>()) });
@@ -1047,5 +1048,5 @@ public sealed class ScreenChoice
 }
 
 public sealed class LibraryBin { public string Name { get; set; } = "GENERAL"; public ObservableCollection<MediaItem> Items { get; set; } = new(); }
-public sealed class EventProject { public string Name { get; set; } = "Evento"; public string ActiveBinName { get; set; } = "GENERAL"; public List<LibraryBin>? Bins { get; set; } = new(); public List<MediaItem> Items { get; set; } = new(); }
+public sealed class EventProject { public MusicProjectData? Music { get; set; } public string Name { get; set; } = "Evento"; public string ActiveBinName { get; set; } = "GENERAL"; public List<LibraryBin>? Bins { get; set; } = new(); public List<MediaItem> Items { get; set; } = new(); }
 public sealed class OperatorPreferences { public string FadeOutAudioHotkey { get; set; } = "F8"; }

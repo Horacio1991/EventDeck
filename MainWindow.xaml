@@ -291,7 +291,7 @@
                             </StackPanel>
                         </Border>
                         <Border Grid.Column="1" Background="{StaticResource Panel}" CornerRadius="12" Padding="18" Margin="6,0,0,0">
-                            <StackPanel><TextBlock Text="SONANDO · ÚLTIMA PISTA LANZADA" Foreground="{StaticResource Accent}" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <StackPanel><TextBlock x:Name="MusicSequenceContext" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextMuted}" FontSize="10" Margin="0,0,0,4"/><TextBlock Text="SONANDO · ÚLTIMA PISTA LANZADA" Foreground="{StaticResource Accent}" FontWeight="Bold" Margin="0,0,0,10"/>
 <StackPanel x:Name="MusicNowPanel" IsEnabled="False">
     <TextBlock Text="{Binding Name, TargetNullValue=Sin pista activa}" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
     <TextBlock Text="{Binding StateText, TargetNullValue=SIN PISTA}" Foreground="{StaticResource Accent}" Margin="0,4,0,0"/>
@@ -310,29 +310,53 @@
                                     <Button x:Name="MusicPrevious" Content="|◀" Click="MusicPrevious_Click" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Lanzar anterior del listado visible, sin volver al final" Padding="10,6"/>
                                     <Button x:Name="MusicNext" Content="▶|" Click="MusicNext_Click" IsEnabled="False" Style="{StaticResource MusicButton}" ToolTip="Lanzar siguiente del listado visible, con crossfade" Padding="10,6" Margin="6,0,0,0"/>
                                     <ToggleButton x:Name="MusicLoop" Content="↻ LOOP" Click="MusicLoop_Click" IsEnabled="False" Style="{StaticResource MusicToggle}" ToolTip="Repetir esta canción; tiene prioridad sobre automático. F7 controla el video." Margin="6,0,0,0"/>
+                                    <ToggleButton x:Name="MusicAuto" Content="▶| AUTO" Click="MusicAuto_Click" Style="{StaticResource MusicToggle}" Padding="7,5" Margin="6,0,0,0" VerticalAlignment="Center" ToolTip="Al finalizar naturalmente, lanzar la siguiente del listado visible. Stop y Fade Out no avanzan."/>
                                     <Button x:Name="MusicFadeOut" Content="FADE OUT" Click="FadeOutAudioButton_Click" Style="{StaticResource MusicButton}" IsEnabled="False" ToolTip="{Binding ToolTip, ElementName=FadeOutAudioButton}" Padding="12,6" Margin="6,0,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
                     </Grid>
-                    <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="18">
+                    <Border Grid.Row="2" Background="{StaticResource Panel}" CornerRadius="12" Padding="8">
                         <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <WrapPanel Margin="0,0,0,14">
-                                <TextBlock Text="Buscar música" VerticalAlignment="Center" Margin="0,0,8,0"/><TextBox x:Name="MusicSearchBox" Width="260" Margin="0,0,10,0" TextChanged="MusicSearch_TextChanged" ToolTip="Buscar música por título o nombre de archivo" AutomationProperties.Name="Buscar música"/>
-                                <Button x:Name="MusicAddButton" ToolTip="Biblioteca temporal durante esta ejecución; no se guarda con el evento" Content="+ AGREGAR MÚSICA" Click="MusicAdd_Click" Style="{StaticResource MusicButton}" Margin="0,0,12,0"/>
-                                <ToggleButton x:Name="MusicAuto" Content="▶| AUTO" Click="MusicAuto_Click" Style="{StaticResource MusicToggle}" VerticalAlignment="Center" ToolTip="Al finalizar naturalmente, lanzar la siguiente del listado visible. Stop y Fade Out no avanzan."/>
-                            </WrapPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="MÚSICA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <ListBox Grid.Column="1" x:Name="MusicCollectionTabs" SelectionChanged="MusicCollection_SelectionChanged" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Disabled" VerticalAlignment="Center">
+                                    <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/></DataTemplate></ListBox.ItemTemplate>
+                                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                                        <Setter Property="MinWidth" Value="100"/><Setter Property="MaxWidth" Value="180"/><Setter Property="Padding" Value="9,5"/><Setter Property="Margin" Value="2,0"/><Setter Property="Background" Value="{StaticResource Panel2}"/>
+                                        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center"/></Border></ControlTemplate></Setter.Value></Setter>
+                                        <Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{StaticResource AccentSecondary}"/></Trigger></Style.Triggers>
+                                    </Style></ListBox.ItemContainerStyle>
+                                </ListBox>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,3,0" VerticalAlignment="Center">
+                                    <Button Content="＋" Click="MusicCollection_Add" ToolTip="Crear colección musical" Padding="7,5" Margin="0,0,3,0"/>
+                                    <Button Content="✎" Click="MusicCollection_Rename" ToolTip="Renombrar colección activa" Padding="7,5" Margin="0,0,3,0"/>
+                                    <Button Content="✕" Click="MusicCollection_Delete" ToolTip="Eliminar colección activa" Padding="7,5"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="4,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Buscar música" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBox x:Name="MusicSearchBox" Width="160" Height="30" VerticalContentAlignment="Center" Padding="7,3" Margin="0,0,4,0" TextChanged="MusicSearch_TextChanged" ToolTip="Buscar música por título o nombre de archivo" AutomationProperties.Name="Buscar música"/>
+                                    <Button x:Name="MusicAddButton" ToolTip="Agregar a la colección activa; se guarda junto con el evento" Content="+ AGREGAR MÚSICA" Click="MusicAdd_Click" Style="{StaticResource MusicButton}" Padding="7,5" Margin="0,0,4,0"/>
+                                </StackPanel>
+                            </Grid>
                             <Grid Grid.Row="1" Background="{StaticResource Panel2}"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions><TextBlock Text="TÍTULO" Margin="12,8" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="DURACIÓN" Margin="8" FontWeight="SemiBold"/></Grid>
                             <Grid Grid.Row="2">
                                 <ListBox x:Name="MusicLibraryList" IsSynchronizedWithCurrentItem="False" Background="#111720" Foreground="{StaticResource TextMain}" BorderThickness="0" SelectionChanged="MusicLibrary_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
                                     <ListBox.ItemTemplate><DataTemplate>
                                         <Grid Margin="8,5"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}" Margin="0,0,12,0"/>
+                                            <StackPanel Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Source}"/>
+                                                <TextBlock Text="⚠ ARCHIVO NO ENCONTRADO" FontSize="10" Foreground="#F2B45C">
+                                                    <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsMissing}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
                                             <TextBlock Grid.Column="1" Text="{Binding DurationLabel}" ToolTip="{Binding DurationStatus}" Foreground="{StaticResource TextMuted}"/>
                                         </Grid>
                                     </DataTemplate></ListBox.ItemTemplate>
                                 </ListBox>
-                                <TextBlock x:Name="MusicLibraryHint" Text="Agregá archivos de audio para preparar tu música. Biblioteca temporal: no se guarda con el evento." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20" IsHitTestVisible="False"/>
+                                <TextBlock x:Name="MusicLibraryHint" Text="Agregá archivos de audio a esta colección. Se guardará junto con el evento." Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20" IsHitTestVisible="False"/>
                             </Grid>
                         </Grid>
                     </Border>

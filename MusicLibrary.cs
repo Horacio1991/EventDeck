@@ -6,7 +6,7 @@ using System.Windows.Media;
 namespace EventDeck;
 
 /// <summary>
-/// Temporary local library for the main window's lifetime. Does not own playback.
+/// Local entries for one event music collection. Does not own playback.
 /// Duration probes open one silent MediaPlayer at a time, never call Play, and close it.
 /// All calls and MediaPlayer events stay on the creating WPF dispatcher.
 /// </summary>
@@ -32,6 +32,22 @@ public sealed class MusicLibrary : IDisposable
             var entry = new MusicLibraryEntry(path);
             _entries.Add(entry);
             _pending.Enqueue(entry);
+        }
+    }
+
+    public void Restore(IEnumerable<MusicEntryData?>? entries)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        foreach (var item in entries ?? [])
+        {
+            if (item is null) continue;
+            var entry = new MusicLibraryEntry(item.Source ?? "", item.Title);
+            if (item.DurationSeconds is { } seconds && double.IsFinite(seconds)
+                && seconds >= 0 && seconds <= TimeSpan.MaxValue.TotalSeconds - 1)
+                entry.SetDuration(TimeSpan.FromSeconds(seconds), "Duración guardada");
+            else if (entry.IsMissing) entry.SetDuration(null, "Archivo no encontrado");
+            else _pending.Enqueue(entry);
+            _entries.Add(entry);
         }
     }
 
