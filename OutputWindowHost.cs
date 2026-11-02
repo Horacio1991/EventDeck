@@ -27,7 +27,6 @@ public sealed class OutputWindowHost
 
     public event EventHandler? ProgramStateChanged;
     public event EventHandler? Closed;
-    public event EventHandler? EmergencyClosed;
     public event EventHandler? DisplayAvailabilityChanged;
     public event EventHandler<string>? RecoveryFailed;
     public bool IsOpen => Volatile.Read(ref _isOpen) != 0;
@@ -64,19 +63,6 @@ public sealed class OutputWindowHost
                     throw new InvalidOperationException("La configuración de pantallas cambió. Actualizá las pantallas y seleccioná nuevamente la salida.");
                 var window = new OutputWindow();
                 _window = window;
-                var emergencyClosing = false;
-                void EmergencyClose()
-                {
-                    if (emergencyClosing) return;
-                    emergencyClosing = true;
-                    // Remove fullscreen immediately; normal Close owns media cleanup.
-                    window.Hide();
-                    _outputDispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
-                    {
-                        window.Close();
-                        _operatorDispatcher.BeginInvoke(new Action(() => EmergencyClosed?.Invoke(this, EventArgs.Empty)));
-                    }));
-                }
                 OutputDisplayTarget? recoveryCandidate = null;
                 var stableSamples = 0;
                 var recoveryGeneration = 0;
@@ -99,7 +85,7 @@ public sealed class OutputWindowHost
                     var generation = recoveryGeneration;
                     var cancellation = new CancellationTokenSource();
                     recoveryCancellation = cancellation;
-                    bool Safe() => !emergencyClosing && IsOpen && !cancellation.IsCancellationRequested &&
+                    bool Safe() => IsOpen && !cancellation.IsCancellationRequested &&
                         generation == recoveryGeneration && stableSamples >= 3 && MatchesOriginal(candidate);
                     _outputDispatcher.BeginInvoke(new Action(async () =>
                     {
@@ -149,11 +135,11 @@ public sealed class OutputWindowHost
                         }
                         catch (OperationCanceledException)
                         {
-                            if (IsOpen && !emergencyClosing) SuspendDisplay();
+                            if (IsOpen) SuspendDisplay();
                         }
                         catch (Exception ex)
                         {
-                            if (IsOpen && !emergencyClosing)
+                            if (IsOpen)
                             {
                                 SuspendDisplay();
                                 recoveryFailed = true; // No unbounded decoder retry loop; a new topology permits retry.
@@ -176,7 +162,6 @@ public sealed class OutputWindowHost
                 }
                 void SuspendDisplay()
                 {
-                    if (emergencyClosing) return;
                     recoveryCandidate = null;
                     stableSamples = 0;
                     window.Hide();
@@ -201,7 +186,7 @@ public sealed class OutputWindowHost
                 }
                 void CheckDisplay()
                 {
-                    if (testMode || emergencyClosing) return;
+                    if (testMode) return;
                     var displays = OutputDisplayTarget.ReadAll();
                     if (!_displaySuspended)
                     {
@@ -241,7 +226,6 @@ public sealed class OutputWindowHost
                 void AttachWindow(OutputWindow attached)
                 {
                     System.Windows.Interop.HwndSource? source = null;
-                    var emergencyHotkey = new GlobalHotkeyRegistration(0x5D03);
                     System.Windows.Interop.HwndSourceHook displayHook =
                         (IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled) =>
                         {
@@ -252,13 +236,6 @@ public sealed class OutputWindowHost
                     {
                         source = System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(attached).Handle);
                         source?.AddHook(displayHook);
-                        emergencyHotkey.TryRegister(attached, System.Windows.Input.Key.Escape, EmergencyClose);
-                    };
-                    attached.PreviewKeyDown += (_, e) =>
-                    {
-                        if (e.Key != System.Windows.Input.Key.Escape) return;
-                        e.Handled = true;
-                        EmergencyClose();
                     };
                     attached.ProgramStateChanged += (_, _) =>
                     {
@@ -267,7 +244,6 @@ public sealed class OutputWindowHost
                     attached.Closed += (_, _) =>
                     {
                         source?.RemoveHook(displayHook);
-                        emergencyHotkey.Dispose();
                         if (ReferenceEquals(retiringWindow, attached)) return;
                         recoveryGeneration++;
                         recoveryCancellation?.Cancel();
@@ -306,7 +282,7 @@ public sealed class OutputWindowHost
                 AttachWindow(window);
                 window.Show();
                 if (!testMode && !TargetAvailable(OutputDisplayTarget.ReadAll())) SuspendDisplay();
-                if (emergencyClosing || _displaySuspended) window.Hide();
+                if (_displaySuspended) window.Hide();
                 Volatile.Write(ref _isOpen, 1);
                 _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
                 _statusTimer.Tick += (_, _) =>

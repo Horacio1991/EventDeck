@@ -170,18 +170,13 @@ public partial class MainWindow : Window
             if (ReferenceEquals(_output, output) && !_isClosing)
                 SetStatus("No se pudo recuperar el video tras reconectar la pantalla: " + message);
         };
-        output.EmergencyClosed += (_, _) =>
-        {
-            RestoreFromTray();
-            SetStatus("Salida cerrada por ESC.");
-        };
         output.DisplayAvailabilityChanged += (_, _) =>
         {
             if (!ReferenceEquals(_output, output) || _isClosing) return;
             if (output.Snapshot.IsDisplaySuspended)
             {
                 RestoreFromTray();
-                SetStatus("Pantalla de salida no disponible. PROGRAM conserva la reproducción y espera el monitor original; ESC cierra la salida.");
+                SetStatus("Pantalla de salida no disponible. PROGRAM conserva la reproducción y espera el monitor original.");
             }
             else
             {
@@ -279,7 +274,7 @@ public partial class MainWindow : Window
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Agregar medios", Multiselect = true, Filter = "Archivos multimedia|*.png;*.jpg;*.jpeg;*.bmp;*.mp4;*.m4v;*.wmv;*.avi;*.mp3;*.wav;*.wma;*.m4a;*.aac|Todos los archivos|*.*" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Agregar medios", Multiselect = true, Filter = "Archivos multimedia|*.png;*.jpg;*.jpeg;*.bmp;*.mp4;*.m4v;*.wmv;*.avi;*.mov;*.mp3;*.wav;*.wma;*.m4a;*.aac|Todos los archivos|*.*" };
         if (dialog.ShowDialog() == true) foreach (var path in dialog.FileNames) AddPath(path);
         UpdateCount();
     }
@@ -291,7 +286,7 @@ public partial class MainWindow : Window
         var kind = extension switch
         {
             ".png" or ".jpg" or ".jpeg" or ".bmp" => MediaKind.Image,
-            ".mp4" or ".m4v" or ".wmv" or ".avi" => MediaKind.Video,
+            ".mp4" or ".m4v" or ".wmv" or ".avi" or ".mov" => MediaKind.Video,
             ".mp3" or ".wav" or ".wma" or ".m4a" or ".aac" => MediaKind.Audio,
             _ => (MediaKind?)null
         };
@@ -407,13 +402,6 @@ public partial class MainWindow : Window
 
     private async void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _output?.IsOpen == true)
-        {
-            e.Handled = true;
-            _output.Close();
-            RestoreFromTray();
-            return;
-        }
         if (e.Key == Key.F6)
         {
             e.Handled = true;

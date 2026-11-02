@@ -111,7 +111,7 @@ public partial class MainWindow
         var filter = item.Kind switch
         {
             MediaKind.Image => "Imágenes|*.png;*.jpg;*.jpeg;*.bmp|Todos los archivos|*.*",
-            MediaKind.Video => "Videos|*.mp4;*.m4v;*.wmv;*.avi|Todos los archivos|*.*",
+            MediaKind.Video => "Videos|*.mp4;*.m4v;*.wmv;*.avi;*.mov|Todos los archivos|*.*",
             MediaKind.Audio => "Audio|*.mp3;*.wav;*.wma;*.m4a;*.aac|Todos los archivos|*.*",
             _ => "Todos los archivos|*.*"
         };
@@ -144,7 +144,7 @@ public partial class MainWindow
     private static MediaKind? GetMediaKind(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".png" or ".jpg" or ".jpeg" or ".bmp" => MediaKind.Image,
-        ".mp4" or ".m4v" or ".wmv" or ".avi" => MediaKind.Video,
+        ".mp4" or ".m4v" or ".wmv" or ".avi" or ".mov" => MediaKind.Video,
         ".mp3" or ".wav" or ".wma" or ".m4a" or ".aac" => MediaKind.Audio,
         _ => null
     };
